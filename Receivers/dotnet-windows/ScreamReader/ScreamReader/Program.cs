@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Net;
 using System.Windows.Forms;
 
 namespace ScreamReader
@@ -8,12 +9,86 @@ namespace ScreamReader
         /// <summary>
         /// The main entry point for the application.
         /// </summary>
+        static void Main(string[] args)
+        {
+            // Parse arguments to get IP and port
+            IPAddress ipAddress = IPAddress.Parse("239.255.77.77"); // Default multicast IP
+            int port = 4010; // Default port
+            bool helpRequested = false;
+            bool multicastIpSpecified = true;
+
+            if (args.Length > 0)
+            {
+                for (int i = 0; i < args.Length; i++)
+                {
+                    string arg = args[i].ToLower();
+                    if (arg == "--ip")
+                    {
+                        if (i + 1 >= args.Length)
+                        {
+                            Console.WriteLine("L'IP doit être spécifié après --ip");
+                            Environment.Exit(1);
+                        }
+                        string ipAddressStr = args[i + 1];
+                        if (!IPAddress.TryParse(ipAddressStr, out IPAddress parsedIpAddress))
+                        {
+                            Console.WriteLine("L'IP spécifié n'est pas valide");
+                            Environment.Exit(1);
+                        }
+                        ipAddress = parsedIpAddress;
+                        i++; // Skip next argument
+                    }
+                    else if (arg == "--port")
+                    {
+                        if (i + 1 >= args.Length)
+                        {
+                            Console.WriteLine("Le port doit être spécifié après --port");
+                            Environment.Exit(1);
+                        }
+                        if (!int.TryParse(args[i + 1], out int parsedPort))
+                        {
+                            Console.WriteLine("Le port doit être un nombre entier");
+                            Environment.Exit(1);
+                        }
+                        port = parsedPort;
+                        i++;
+                    }
+                    else if (arg == "--unicast")
+                    {
+                        multicastIpSpecified = false;
+                    }
+                    else if (arg == "--multicast")
+                    {
+                        multicastIpSpecified = true;
+                    }
+                    else if (arg == "--help" || arg == "-h")
+                    {
+                        helpRequested = true;
+                        break;
+                    }
+                }
+            }
+
+            if (helpRequested)
+            {
+                Console.WriteLine("Utilisation :");
+                Console.WriteLine("\t--ip <adresse_IP>  : Spécifier l'IP à écouter");
+                Console.WriteLine("\t--port <num_port>  : Spécifier le port à écouter");
+                Console.WriteLine("\t--unicast          : Utiliser l'adresse IP en unicast");
+                Console.WriteLine("\t--multicast        : Utiliser l'adresse IP en multicast (par défaut)");
+                Console.WriteLine("\t--help ou -h       : Afficher cette aide");
+                Environment.Exit(0);
+            }
+
+            startScreamReader(ipAddress, port, multicastIpSpecified);
+        }
+
         [STAThread]
-        static void Main()
+        static void startScreamReader(IPAddress ipAddress, int port, bool multicast)
         {
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
-            Application.Run(new ScreamReaderTray());
+            Application.Run(new ScreamReaderTray(ipAddress, port, multicast));
         }
     }
 
@@ -28,9 +103,16 @@ namespace ScreamReader
 
         private MainForm mainForm;
 
-        public ScreamReaderTray()
+        public ScreamReaderTray(IPAddress ipAddress, int port, bool multicast)
         {
-            this.udpPlayer = new UdpWaveStreamPlayer();
+            if (multicast)
+            {
+                this.udpPlayer = new MulticastUdpWaveStreamPlayer(ipAddress, port);
+            }
+            else
+            {
+                this.udpPlayer = new UnicastUdpWaveStreamPlayer(port);
+            }
             this.udpPlayer.Start();
             this.mainForm = new MainForm(this);
             this.trayMenu = new ContextMenu();

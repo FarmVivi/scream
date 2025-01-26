@@ -5,47 +5,20 @@ using System.Net.Sockets;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Diagnostics;
-
+using System.Management;
 
 namespace ScreamReader
 {
-    internal class UdpWaveStreamPlayer : IDisposable
+    internal abstract class UdpWaveStreamPlayer : IDisposable
     {
-        #region static defaults
-        /// <summary>
-        /// The <see cref="IPAddress"/> scream is broadcasting to.
-        /// </summary>
-        public static readonly IPAddress ScreamMulticastAddress =
-             IPAddress.Parse("239.255.77.77");
-
-        /// <summary>
-        /// The port scream is broadcasting on.
-        /// </summary>
-        public static readonly int ScreamMulticastPort = 4010;
-        #endregion
-
-        #region instance variables
-        /// <summary>
-        /// The <see cref="IPAddress"/> in use.
-        /// </summary>
-        protected IPAddress multicastAddress { get; set; }
-
-        /// <summary>
-        /// The port to listen to.
-        /// </summary>
-        protected int multicastPort { get; set; }
-        
+        #region instance variables        
         private Semaphore startLock;
-
         private Semaphore shutdownLock;
-
         private CancellationTokenSource cancellationTokenSource;
-
         private UdpClient udpClient;
-
         private WasapiOut output;
-
         private int volume;
+        private IWaveProvider currentWaveProvider;
         #endregion
 
         #region public properties
@@ -54,7 +27,6 @@ namespace ScreamReader
         /// </summary>
         public int Volume
         {
-
             get
             {
                 if (this.output != null) this.volume = (int)(output.Volume * 100);
@@ -78,33 +50,23 @@ namespace ScreamReader
         }
         #endregion
 
-
-        /// <summary>
-        /// Default c'tor that supports Scream's default settings.
-        /// </summary>
-        public UdpWaveStreamPlayer()
-            : this(ScreamMulticastAddress, ScreamMulticastPort)
-        {
-        }
-
         /// <summary>
         /// Initialize the client with the specific address, port and format.
         /// </summary>
-        /// <param name="multicastAddress"></param>
-        /// <param name="multicastPort"></param>
-        public UdpWaveStreamPlayer(IPAddress multicastAddress, int multicastPort)
+        public UdpWaveStreamPlayer()
         {
-            this.multicastAddress = multicastAddress;
-            this.multicastPort = multicastPort;
-
             this.startLock = new Semaphore(1, 1);
             this.shutdownLock = new Semaphore(0, 1);
-            
+
             this.udpClient = new UdpClient
             {
                 ExclusiveAddressUse = false
             };
+
+            StartAudioDeviceWatcher();
         }
+
+        protected abstract void ConfigureUdpClient(UdpClient udpClient, IPEndPoint localEp);
 
         /// <summary>
         /// Starts listening to the broadcast and plays back audio received from it.
@@ -123,33 +85,17 @@ namespace ScreamReader
                 var currentChannelsMapLsb = 0x03; // stereo
                 var currentChannelsMapMsb = 0x00;
                 var currentChannelsMap = (currentChannelsMapMsb << 8) | currentChannelsMapLsb;
-                var localEp = new IPEndPoint(IPAddress.Any, this.multicastPort);
+                IPEndPoint localEp = null;
 
-                this.udpClient.Client.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
-                this.udpClient.Client.Bind(localEp);
-                this.udpClient.JoinMulticastGroup(this.multicastAddress);
+                ConfigureUdpClient(this.udpClient, localEp);
 
-                var rsws = new BufferedWaveProvider(new WaveFormat(44100, currentWidth, currentChannels)) { BufferDuration = TimeSpan.FromMilliseconds(200), DiscardOnBufferOverflow = true };
+                var rsws = new BufferedWaveProvider(new WaveFormat(44100, currentWidth, currentChannels))
+                {
+                    BufferDuration = TimeSpan.FromMilliseconds(200),
+                    DiscardOnBufferOverflow = true
+                };
 
-                this.output = new WasapiOut();
-                // 
-                // This code isn't thread safe. Getting inconsistent results if Debug build is enabled and/or run from the debugger
-                // 
-                // If volume isn't initialized and Debugs are enabled the loudnessFader starts with the actual volume level
-                // This is minor though because the fader only checks once and doesn't handle any events so it will get out of sync
-                // 
-                this.volume = (int)(this.output.Volume * 100); // initialize for now
-                Debug.WriteLine("First volume check = {0}", this.volume);
-                Debug.WriteLine("First volume check = {0}", this.output.Volume * 100);
-
-#if OVERRIDE_MASTERVOLUME
-                this.Volume = 100;
-#endif
-
-                this.output.Init(rsws);
-               
-                this.output.Play();
-                //this.volume = (int)this.output.Volume * 100; // should this go here? doesn't seem to read MasterVolumeLevelScalar
+                InitializeOutputDevice(rsws);
 
                 Task.Factory.StartNew(() =>
                 {
@@ -157,9 +103,10 @@ namespace ScreamReader
                     {
                         try
                         {
-                            Byte[] data = this.udpClient.Receive(ref localEp);
-                            
-                            if (data[0] != currentRate || data[1] != currentWidth || data[2] != currentChannels || data[3] != currentChannelsMapLsb || data[4] != currentChannelsMapMsb)
+                            byte[] data = this.udpClient.Receive(ref localEp);
+
+                            if (data[0] != currentRate || data[1] != currentWidth || data[2] != currentChannels
+                                || data[3] != currentChannelsMapLsb || data[4] != currentChannelsMapMsb)
                             {
                                 currentRate = data[0];
                                 currentWidth = data[1];
@@ -168,37 +115,41 @@ namespace ScreamReader
                                 currentChannelsMapMsb = data[4];
                                 currentChannelsMap = (currentChannelsMapMsb << 8) | currentChannelsMapLsb;
 
-                                // TODO find a way to set a channel map in NAudio. I was not able to find any.
-                                // In practice if both the source and the receiver windows machine have the same speakers configuration setted this doesn't matter,
-                                // but in all other cases the channels will be possibly mismatched.
-                                this.output.Stop();
+                                // Stop current output
+                                if (this.output != null)
+                                {
+                                    this.output.Stop();
+                                }
+
                                 var rate = ((currentRate >= 128) ? 44100 : 48000) * (currentRate % 128);
-
-                                rsws = new BufferedWaveProvider(new WaveFormat(rate, currentWidth, currentChannels)) { BufferDuration = TimeSpan.FromMilliseconds(200), DiscardOnBufferOverflow = true };
-                                this.output = new WasapiOut();
-                                //
-                                //    this.volume = (int)(this.output.Volume * 100);  // need to set this here or exception in loudnessFader dialog
-                                //    Debug.WriteLine("2nd volume check = {0}", this.volume);
-                                Debug.WriteLine("2nd volume check = {0}", this.output.Volume * 100);
-
-                                this.output.Init(rsws);
-                                this.output.Play();
-                            //    this.volume = (int)(this.output.Volume * 100); // can initialize here 
-                                Debug.WriteLine("3rd volume check = {0}", this.output.Volume * 100);
+                                rsws = new BufferedWaveProvider(new WaveFormat(rate, currentWidth, currentChannels))
+                                {
+                                    BufferDuration = TimeSpan.FromMilliseconds(200),
+                                    DiscardOnBufferOverflow = true
+                                };
+                                InitializeOutputDevice(rsws);
                             }
+
                             rsws.AddSamples(data, 5, data.Length - 5);
-                        } catch (SocketException) { } // Usually when interrupted
-                        catch(Exception e)
+                        }
+                        catch (SocketException)
+                        {
+                            // Usually when interrupted
+                        }
+                        catch (Exception e)
                         {
                             System.Windows.Forms.MessageBox.Show(e.StackTrace, e.Message);
-                           
                         }
                     }
                 }, this.cancellationTokenSource.Token);
 
                 this.shutdownLock.WaitOne();
 
-                this.output.Stop();
+                // Cleanup
+                if (this.output != null)
+                {
+                    this.output.Stop();
+                }
                 this.udpClient.Close();
             }, this.cancellationTokenSource.Token);
         }
@@ -211,6 +162,64 @@ namespace ScreamReader
             this.shutdownLock.Release();
             this.cancellationTokenSource.Cancel();
             this.startLock.Release();
+        }
+
+        private void StartAudioDeviceWatcher()
+        {
+            Task.Factory.StartNew(() =>
+            {
+                try
+                {
+                    ManagementEventWatcher watcher = new ManagementEventWatcher(
+                        new WqlEventQuery("SELECT * FROM Win32_DeviceChangeEvent WHERE EventType = 2"));
+
+                    watcher.EventArrived += (sender, args) =>
+                    {
+                        Console.WriteLine("Audio device change detected. Switching output device...");
+
+                        // Re-initialize output device with the current wave provider
+                        if (this.output != null && this.output.PlaybackState == PlaybackState.Playing)
+                        {
+                            this.output.Stop();
+                            this.output.Dispose();
+
+                            // Re-initialize the output device with the same wave provider
+                            if (this.currentWaveProvider != null)
+                            {
+                                InitializeOutputDevice(this.currentWaveProvider);
+                            }
+                        }
+                    };
+
+                    watcher.Start();
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Failed to start audio device watcher: {ex.Message}");
+                }
+            });
+        }
+
+        private void InitializeOutputDevice(IWaveProvider waveProvider)
+        {
+            if (waveProvider == null)
+            {
+                // If no wave provider, nothing to init
+                return;
+            }
+
+            // Dispose of previous output if it exists
+            if (this.output != null)
+            {
+                this.output.Stop();
+                this.output.Dispose();
+            }
+
+            this.currentWaveProvider = waveProvider;
+            this.output = new WasapiOut();
+            this.output.Init(this.currentWaveProvider);
+            this.output.Volume = (float)this.volume / 100f;
+            this.output.Play();
         }
 
         #region dispose
