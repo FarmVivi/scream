@@ -1,26 +1,29 @@
 ﻿using NAudio.Wave;
 using System;
+using System.Diagnostics;
+using System.Management;
 using System.Net;
 using System.Net.Sockets;
 using System.Threading;
 using System.Threading.Tasks;
-using System.Diagnostics;
-using System.Management;
+using System.Windows.Forms;
 
 namespace ScreamReader
 {
     internal abstract class UdpWaveStreamPlayer : IDisposable
     {
         #region instance variables
-        private Semaphore startLock;
-        private Semaphore shutdownLock;
+        private readonly Semaphore startLock;
+        private readonly Semaphore shutdownLock;
         private CancellationTokenSource cancellationTokenSource;
         private UdpClient udpClient;
         private WasapiOut output;
-        private int volume;
         private IWaveProvider currentWaveProvider;
+        private ManagementEventWatcher deviceWatcher; // to dispose in Dispose()
 
-        // New fields to store constructor parameters
+        private int volume;
+
+        // Fields to store constructor parameters
         protected int BitWidth { get; set; }
         protected int SampleRate { get; set; }
         protected int ChannelCount { get; set; }
@@ -28,22 +31,23 @@ namespace ScreamReader
 
         #region public properties
         /// <summary>
-        /// Used to control the volume. Valid values are [0, 100].
+        /// Volume property in [0..100].
         /// </summary>
         public int Volume
         {
             get
             {
-                if (this.output != null) this.volume = (int)(output.Volume * 100);
+                if (this.output != null)
+                {
+                    this.volume = (int)(this.output.Volume * 100);
+                }
                 Debug.WriteLine("get Volume = {0}", this.volume);
                 return this.volume;
             }
             set
             {
                 if (value < 0 || value > 100)
-                {
                     throw new ArgumentOutOfRangeException(nameof(value));
-                }
 
                 this.volume = value;
                 if (this.output != null)
@@ -56,7 +60,7 @@ namespace ScreamReader
         #endregion
 
         /// <summary>
-        /// Initialize the client with a default constructor (not used directly here).
+        /// Default constructor. Initializes common resources.
         /// </summary>
         public UdpWaveStreamPlayer()
         {
@@ -72,164 +76,178 @@ namespace ScreamReader
         }
 
         /// <summary>
-        /// Overloaded constructor with custom bit width, sample rate, and channel count.
+        /// Overloaded constructor for user-specified audio format.
         /// </summary>
-        public UdpWaveStreamPlayer(int bitWidth, int rate, int channels) : this()
+        public UdpWaveStreamPlayer(int bitWidth, int rate, int channels)
+            : this()
         {
             this.BitWidth = bitWidth;
             this.SampleRate = rate;
             this.ChannelCount = channels;
         }
 
+        /// <summary>
+        /// Abstract method to let derived classes configure the UdpClient (bind, join group, etc.).
+        /// </summary>
         protected abstract void ConfigureUdpClient(UdpClient udpClient, IPEndPoint localEp);
 
         /// <summary>
-        /// Starts listening to the broadcast and plays back audio received from it.
-        /// Subsequent calls to this method require to call <see cref="Stop"/> in between.
+        /// Start reading from the UDP stream and playing audio.
         /// </summary>
         public virtual void Start()
         {
+            // Prevent multiple calls without stopping
             this.startLock.WaitOne();
+
+            // Create a new token for this run
             this.cancellationTokenSource = new CancellationTokenSource();
 
-            Task.Factory.StartNew(() =>
+            // Run in background
+            Task.Run(() =>
             {
-                // Use the user-specified values for the initial wave format
-                // We will adapt if the data packets come with a different format.
-                byte currentRate = (byte)((this.SampleRate == 44100) ? 129 : 1);
-                byte currentWidth = (byte)this.BitWidth;
-                byte currentChannels = (byte)this.ChannelCount;
-
-                // Channel map bytes (simplified: stereo = 0x03, mono = 0x01)
-                // If we need more logic for 5.1/7.1 channels, adapt here.
-                byte currentChannelsMapLsb = (this.ChannelCount == 2) ? (byte)0x03 : (byte)0x01;
-                byte currentChannelsMapMsb = 0x00;
-                var currentChannelsMap = (currentChannelsMapMsb << 8) | currentChannelsMapLsb;
-
-                IPEndPoint localEp = null;
-
-                ConfigureUdpClient(this.udpClient, localEp);
-
-                // Initialize with the user-specified format
-                var rsws = new BufferedWaveProvider(new WaveFormat(this.SampleRate, this.BitWidth, this.ChannelCount))
+                try
                 {
-                    BufferDuration = TimeSpan.FromMilliseconds(200),
-                    DiscardOnBufferOverflow = true
-                };
+                    IPEndPoint localEp = null;
+                    ConfigureUdpClient(this.udpClient, localEp);
 
-                InitializeOutputDevice(rsws);
+                    // Use the user-specified format initially.
+                    byte currentRate = (byte)((this.SampleRate == 44100) ? 129 : 1);
+                    byte currentWidth = (byte)this.BitWidth;
+                    byte currentChannels = (byte)this.ChannelCount;
 
-                Task.Factory.StartNew(() =>
-                {
+                    // Basic channel map bytes: (stereo = 0x03, mono = 0x01, etc.)
+                    byte currentChannelsMapLsb = (this.ChannelCount == 2) ? (byte)0x03 : (byte)0x01;
+                    byte currentChannelsMapMsb = 0x00;
+
+                    var rsws = new BufferedWaveProvider(
+                        new WaveFormat(this.SampleRate, this.BitWidth, this.ChannelCount))
+                    {
+                        BufferDuration = TimeSpan.FromMilliseconds(200),
+                        DiscardOnBufferOverflow = true
+                    };
+
+                    InitializeOutputDevice(rsws);
+
+                    // Start reading loop
                     while (!this.cancellationTokenSource.IsCancellationRequested)
                     {
                         try
                         {
                             byte[] data = this.udpClient.Receive(ref localEp);
 
-                            // If the Scream protocol signals a different format, adapt.
-                            if (data[0] != currentRate || data[1] != currentWidth || data[2] != currentChannels
-                                || data[3] != currentChannelsMapLsb || data[4] != currentChannelsMapMsb)
+                            // Ensure data is long enough for the Scream protocol header
+                            if (data.Length < 5)
+                                continue;
+
+                            // Check if there's a new format signaled by the first 5 bytes
+                            if (data[0] != currentRate || data[1] != currentWidth ||
+                                data[2] != currentChannels ||
+                                data[3] != currentChannelsMapLsb || data[4] != currentChannelsMapMsb)
                             {
                                 currentRate = data[0];
                                 currentWidth = data[1];
                                 currentChannels = data[2];
                                 currentChannelsMapLsb = data[3];
                                 currentChannelsMapMsb = data[4];
-                                currentChannelsMap = (currentChannelsMapMsb << 8) | currentChannelsMapLsb;
 
-                                // Stop current output
-                                if (this.output != null)
-                                {
-                                    this.output.Stop();
-                                }
+                                // This formula is used by Scream to indicate 44.1 or 48k with a multiplier.
+                                int newRate = ((currentRate >= 128) ? 44100 : 48000)
+                                              * (currentRate % 128);
 
-                                var rate = ((currentRate >= 128) ? 44100 : 48000) * (currentRate % 128);
-                                rsws = new BufferedWaveProvider(new WaveFormat(rate, currentWidth, currentChannels))
+                                // Stop old output before re-initializing
+                                this.output?.Stop();
+
+                                rsws = new BufferedWaveProvider(new WaveFormat(newRate,
+                                    currentWidth, currentChannels))
                                 {
                                     BufferDuration = TimeSpan.FromMilliseconds(200),
                                     DiscardOnBufferOverflow = true
                                 };
+
                                 InitializeOutputDevice(rsws);
                             }
 
+                            // Add samples (starting after the 5-byte header)
                             rsws.AddSamples(data, 5, data.Length - 5);
                         }
                         catch (SocketException)
                         {
-                            // Usually when interrupted
+                            // Thrown if udpClient is closed or on cancellation
+                            break;
                         }
-                        catch (Exception e)
+                        catch (Exception ex)
                         {
-                            System.Windows.Forms.MessageBox.Show(e.StackTrace, e.Message);
+                            MessageBox.Show(ex.StackTrace, ex.Message);
                         }
                     }
-                }, this.cancellationTokenSource.Token);
 
-                this.shutdownLock.WaitOne();
+                    // Once Stop() is called, we wait for shutdownLock
+                    // to release, so the method can exit gracefully
+                    this.shutdownLock.WaitOne();
 
-                // Cleanup
-                if (this.output != null)
-                {
-                    this.output.Stop();
+                    // Cleanup
+                    this.output?.Stop();
+                    this.udpClient.Close();
+                    this.udpClient.Dispose();
                 }
-                this.udpClient.Close();
+                finally
+                {
+                    // Release the semaphore so Start() can be called again if needed
+                    this.startLock.Release();
+                }
             }, this.cancellationTokenSource.Token);
         }
 
         /// <summary>
-        /// Stops reading data from the broadcast and playing it back.
+        /// Stop reading and playing audio. Subsequent calls to <see cref="Start"/> are allowed.
         /// </summary>
         public void Stop()
         {
+            this.cancellationTokenSource?.Cancel();
             this.shutdownLock.Release();
-            this.cancellationTokenSource.Cancel();
-            this.startLock.Release();
         }
 
+        /// <summary>
+        /// Watch for audio device changes on Windows and re-initialize the output device if needed.
+        /// </summary>
         private void StartAudioDeviceWatcher()
         {
-            Task.Factory.StartNew(() =>
+            try
             {
-                try
-                {
-                    ManagementEventWatcher watcher = new ManagementEventWatcher(
-                        new WqlEventQuery("SELECT * FROM Win32_DeviceChangeEvent WHERE EventType = 2"));
+                this.deviceWatcher = new ManagementEventWatcher(
+                    new WqlEventQuery("SELECT * FROM Win32_DeviceChangeEvent WHERE EventType = 2"));
 
-                    watcher.EventArrived += (sender, args) =>
+                this.deviceWatcher.EventArrived += (sender, args) =>
+                {
+                    Console.WriteLine("Audio device change detected. Switching output device...");
+
+                    // Re-initialize output device with the current wave provider
+                    if (this.output != null && this.output.PlaybackState == PlaybackState.Playing)
                     {
-                        Console.WriteLine("Audio device change detected. Switching output device...");
+                        this.output.Stop();
+                        this.output.Dispose();
 
-                        // Re-initialize output device with the current wave provider
-                        if (this.output != null && this.output.PlaybackState == PlaybackState.Playing)
+                        if (this.currentWaveProvider != null)
                         {
-                            this.output.Stop();
-                            this.output.Dispose();
-
-                            // Re-initialize the output device with the same wave provider
-                            if (this.currentWaveProvider != null)
-                            {
-                                InitializeOutputDevice(this.currentWaveProvider);
-                            }
+                            InitializeOutputDevice(this.currentWaveProvider);
                         }
-                    };
+                    }
+                };
 
-                    watcher.Start();
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine($"Failed to start audio device watcher: {ex.Message}");
-                }
-            });
+                this.deviceWatcher.Start();
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Failed to start audio device watcher: {ex.Message}");
+            }
         }
 
+        /// <summary>
+        /// Sets up the WasapiOut device with the given wave provider, disposing the old one if present.
+        /// </summary>
         private void InitializeOutputDevice(IWaveProvider waveProvider)
         {
-            if (waveProvider == null)
-            {
-                // If no wave provider, nothing to init
-                return;
-            }
+            if (waveProvider == null) return;
 
             // Dispose of previous output if it exists
             if (this.output != null)
@@ -248,15 +266,29 @@ namespace ScreamReader
         #region dispose
         public void Dispose()
         {
-            this.Dispose(true);
+            Dispose(true);
+            GC.SuppressFinalize(this);
         }
 
         public virtual void Dispose(bool disposing)
         {
             if (disposing)
             {
+                try
+                {
+                    this.deviceWatcher?.Stop();
+                    this.deviceWatcher?.Dispose();
+                }
+                catch { /* ignore */ }
+
                 this.startLock.Dispose();
                 this.shutdownLock.Dispose();
+
+                // If user calls Dispose without calling Stop, attempt to clean up
+                this.cancellationTokenSource?.Cancel();
+                this.udpClient?.Close();
+                this.udpClient?.Dispose();
+                this.output?.Dispose();
             }
         }
         #endregion
