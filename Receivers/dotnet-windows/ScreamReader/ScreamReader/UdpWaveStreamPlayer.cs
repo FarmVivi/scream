@@ -136,7 +136,7 @@ namespace ScreamReader
                     var rsws = new BufferedWaveProvider(
                         new WaveFormat(this.SampleRate, this.BitWidth, this.ChannelCount))
                     {
-                        BufferDuration = TimeSpan.FromMilliseconds(50),
+                        BufferDuration = TimeSpan.FromMilliseconds(100),
                         DiscardOnBufferOverflow = true
                     };
 
@@ -173,7 +173,7 @@ namespace ScreamReader
 
                                 rsws = new BufferedWaveProvider(new WaveFormat(newRate, currentWidth, currentChannels))
                                 {
-                                    BufferDuration = TimeSpan.FromMilliseconds(50),
+                                    BufferDuration = TimeSpan.FromMilliseconds(100),
                                     DiscardOnBufferOverflow = true
                                 };
 
@@ -266,7 +266,7 @@ namespace ScreamReader
             using (var mmDeviceEnum = new MMDeviceEnumerator())
             {
                 var device = mmDeviceEnum.GetDefaultAudioEndpoint(DataFlow.Render, Role.Multimedia);
-                this.output = new WasapiOut(device, AudioClientShareMode.Shared, false, 50);
+                this.output = new WasapiOut(device, AudioClientShareMode.Shared, false, 100);
             }
 
             this.currentWaveProvider = waveProvider;
