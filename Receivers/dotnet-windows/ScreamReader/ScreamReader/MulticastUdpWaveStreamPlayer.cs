@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Net;
 using System.Net.Sockets;
+using System.Runtime.Remoting.Channels;
 using System.Text;
 using System.Threading.Tasks;
 
@@ -12,23 +13,23 @@ namespace ScreamReader
     {
         #region instance variables
         /// <summary>
-        /// The <see cref="IPAddress"/> in use.
-        /// </summary>
-        protected IPAddress multicastAddress { get; set; }
-
-        /// <summary>
         /// The port to listen to.
         /// </summary>
         protected int multicastPort { get; set; }
+
+        /// <summary>
+        /// The <see cref="IPAddress"/> in use.
+        /// </summary>
+        protected IPAddress multicastAddress { get; set; }
         #endregion
 
         /// <summary>
         /// Initialize the client with the specific address, port and format.
         /// </summary>
-        public MulticastUdpWaveStreamPlayer(IPAddress multicastAddress, int multicastPort) : base()
+        public MulticastUdpWaveStreamPlayer(int bitWidth, int rate, int channels, int multicastPort, IPAddress multicastAddress) : base(bitWidth, rate, channels)
         {
-            this.multicastAddress = multicastAddress;
             this.multicastPort = multicastPort;
+            this.multicastAddress = multicastAddress;
         }
 
         /// <summary>

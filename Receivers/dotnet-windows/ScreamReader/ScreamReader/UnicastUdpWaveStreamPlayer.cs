@@ -5,6 +5,7 @@ using System.Net.Sockets;
 using System.Net;
 using System.Text;
 using System.Threading.Tasks;
+using System.Runtime.Remoting.Channels;
 
 namespace ScreamReader
 {
@@ -25,7 +26,7 @@ namespace ScreamReader
         /// <summary>
         /// Initialize the client with the specific port and optional IP address.
         /// </summary>
-        public UnicastUdpWaveStreamPlayer(int unicastPort, IPAddress localAddress = null) : base()
+        public UnicastUdpWaveStreamPlayer(int bitWidth, int rate, int channels, int unicastPort, IPAddress localAddress = null) : base(bitWidth, rate, channels)
         {
             this.unicastPort = unicastPort;
             this.localAddress = localAddress ?? IPAddress.Any; // Default to any local address

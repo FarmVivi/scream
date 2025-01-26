@@ -11,7 +11,7 @@ namespace ScreamReader
 {
     internal abstract class UdpWaveStreamPlayer : IDisposable
     {
-        #region instance variables        
+        #region instance variables
         private Semaphore startLock;
         private Semaphore shutdownLock;
         private CancellationTokenSource cancellationTokenSource;
@@ -19,6 +19,11 @@ namespace ScreamReader
         private WasapiOut output;
         private int volume;
         private IWaveProvider currentWaveProvider;
+
+        // New fields to store constructor parameters
+        protected int BitWidth { get; set; }
+        protected int SampleRate { get; set; }
+        protected int ChannelCount { get; set; }
         #endregion
 
         #region public properties
@@ -51,7 +56,7 @@ namespace ScreamReader
         #endregion
 
         /// <summary>
-        /// Initialize the client with the specific address, port and format.
+        /// Initialize the client with a default constructor (not used directly here).
         /// </summary>
         public UdpWaveStreamPlayer()
         {
@@ -64,6 +69,16 @@ namespace ScreamReader
             };
 
             StartAudioDeviceWatcher();
+        }
+
+        /// <summary>
+        /// Overloaded constructor with custom bit width, sample rate, and channel count.
+        /// </summary>
+        public UdpWaveStreamPlayer(int bitWidth, int rate, int channels) : this()
+        {
+            this.BitWidth = bitWidth;
+            this.SampleRate = rate;
+            this.ChannelCount = channels;
         }
 
         protected abstract void ConfigureUdpClient(UdpClient udpClient, IPEndPoint localEp);
@@ -79,17 +94,24 @@ namespace ScreamReader
 
             Task.Factory.StartNew(() =>
             {
-                var currentRate = 129;
-                var currentWidth = 16;
-                var currentChannels = 2;
-                var currentChannelsMapLsb = 0x03; // stereo
-                var currentChannelsMapMsb = 0x00;
+                // Use the user-specified values for the initial wave format
+                // We will adapt if the data packets come with a different format.
+                byte currentRate = (byte)((this.SampleRate == 44100) ? 129 : 1);
+                byte currentWidth = (byte)this.BitWidth;
+                byte currentChannels = (byte)this.ChannelCount;
+
+                // Channel map bytes (simplified: stereo = 0x03, mono = 0x01)
+                // If we need more logic for 5.1/7.1 channels, adapt here.
+                byte currentChannelsMapLsb = (this.ChannelCount == 2) ? (byte)0x03 : (byte)0x01;
+                byte currentChannelsMapMsb = 0x00;
                 var currentChannelsMap = (currentChannelsMapMsb << 8) | currentChannelsMapLsb;
+
                 IPEndPoint localEp = null;
 
                 ConfigureUdpClient(this.udpClient, localEp);
 
-                var rsws = new BufferedWaveProvider(new WaveFormat(44100, currentWidth, currentChannels))
+                // Initialize with the user-specified format
+                var rsws = new BufferedWaveProvider(new WaveFormat(this.SampleRate, this.BitWidth, this.ChannelCount))
                 {
                     BufferDuration = TimeSpan.FromMilliseconds(200),
                     DiscardOnBufferOverflow = true
@@ -105,6 +127,7 @@ namespace ScreamReader
                         {
                             byte[] data = this.udpClient.Receive(ref localEp);
 
+                            // If the Scream protocol signals a different format, adapt.
                             if (data[0] != currentRate || data[1] != currentWidth || data[2] != currentChannels
                                 || data[3] != currentChannelsMapLsb || data[4] != currentChannelsMapMsb)
                             {
