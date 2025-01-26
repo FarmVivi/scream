@@ -122,7 +122,7 @@ namespace ScreamReader
                     var rsws = new BufferedWaveProvider(
                         new WaveFormat(this.SampleRate, this.BitWidth, this.ChannelCount))
                     {
-                        BufferDuration = TimeSpan.FromMilliseconds(200),
+                        BufferDuration = TimeSpan.FromMilliseconds(50),
                         DiscardOnBufferOverflow = true
                     };
 
@@ -160,7 +160,7 @@ namespace ScreamReader
                                 rsws = new BufferedWaveProvider(new WaveFormat(newRate,
                                     currentWidth, currentChannels))
                                 {
-                                    BufferDuration = TimeSpan.FromMilliseconds(200),
+                                    BufferDuration = TimeSpan.FromMilliseconds(50),
                                     DiscardOnBufferOverflow = true
                                 };
 
