@@ -1,16 +1,17 @@
 ﻿using NAudio.Wave;
+using NAudio.CoreAudioApi;      // For MMDeviceEnumerator & IMMNotificationClient
 using System;
 using System.Diagnostics;
-using System.Management;
 using System.Net;
 using System.Net.Sockets;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
+using NAudio.CoreAudioApi.Interfaces;
 
 namespace ScreamReader
 {
-    internal abstract class UdpWaveStreamPlayer : IDisposable
+    internal abstract class UdpWaveStreamPlayer : IDisposable, IMMNotificationClient
     {
         #region instance variables
         private readonly Semaphore startLock;
@@ -19,7 +20,8 @@ namespace ScreamReader
         private UdpClient udpClient;
         private WasapiOut output;
         private IWaveProvider currentWaveProvider;
-        private ManagementEventWatcher deviceWatcher; // to dispose in Dispose()
+
+        private MMDeviceEnumerator deviceEnumerator; // For default device change notifications
 
         private int volume;
 
@@ -59,6 +61,7 @@ namespace ScreamReader
         }
         #endregion
 
+        #region constructors
         /// <summary>
         /// Default constructor. Initializes common resources.
         /// </summary>
@@ -67,12 +70,22 @@ namespace ScreamReader
             this.startLock = new Semaphore(1, 1);
             this.shutdownLock = new Semaphore(0, 1);
 
+            // Prepare the UdpClient
             this.udpClient = new UdpClient
             {
                 ExclusiveAddressUse = false
             };
 
-            StartAudioDeviceWatcher();
+            // Set up device enumerator for default device change notifications
+            try
+            {
+                this.deviceEnumerator = new MMDeviceEnumerator();
+                this.deviceEnumerator.RegisterEndpointNotificationCallback(this);
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"[UdpWaveStreamPlayer] Failed to register device notifications: {ex.Message}");
+            }
         }
 
         /// <summary>
@@ -85,6 +98,7 @@ namespace ScreamReader
             this.SampleRate = rate;
             this.ChannelCount = channels;
         }
+        #endregion
 
         /// <summary>
         /// Abstract method to let derived classes configure the UdpClient (bind, join group, etc.).
@@ -115,7 +129,7 @@ namespace ScreamReader
                     byte currentWidth = (byte)this.BitWidth;
                     byte currentChannels = (byte)this.ChannelCount;
 
-                    // Basic channel map bytes: (stereo = 0x03, mono = 0x01, etc.)
+                    // Basic channel map bytes: stereo = 0x03, mono = 0x01, etc.
                     byte currentChannelsMapLsb = (this.ChannelCount == 2) ? (byte)0x03 : (byte)0x01;
                     byte currentChannelsMapMsb = 0x00;
 
@@ -150,15 +164,14 @@ namespace ScreamReader
                                 currentChannelsMapLsb = data[3];
                                 currentChannelsMapMsb = data[4];
 
-                                // This formula is used by Scream to indicate 44.1 or 48k with a multiplier.
+                                // Scream formula to indicate 44.1 or 48k plus a multiplier
                                 int newRate = ((currentRate >= 128) ? 44100 : 48000)
                                               * (currentRate % 128);
 
                                 // Stop old output before re-initializing
                                 this.output?.Stop();
 
-                                rsws = new BufferedWaveProvider(new WaveFormat(newRate,
-                                    currentWidth, currentChannels))
+                                rsws = new BufferedWaveProvider(new WaveFormat(newRate, currentWidth, currentChannels))
                                 {
                                     BufferDuration = TimeSpan.FromMilliseconds(50),
                                     DiscardOnBufferOverflow = true
@@ -181,8 +194,7 @@ namespace ScreamReader
                         }
                     }
 
-                    // Once Stop() is called, we wait for shutdownLock
-                    // to release, so the method can exit gracefully
+                    // Once Stop() is called, wait on shutdownLock so the method can exit gracefully
                     this.shutdownLock.WaitOne();
 
                     // Cleanup
@@ -207,40 +219,33 @@ namespace ScreamReader
             this.shutdownLock.Release();
         }
 
-        /// <summary>
-        /// Watch for audio device changes on Windows and re-initialize the output device if needed.
-        /// </summary>
-        private void StartAudioDeviceWatcher()
+        #region IMMNotificationClient Implementation
+
+        // Called by Windows whenever the default render device changes
+        public void OnDefaultDeviceChanged(DataFlow flow, Role role, string defaultDeviceId)
         {
-            try
+            // We only care about rendering device changes for the "Multimedia" role
+            // or you might also want to check for "Console" or "Communications"
+            if (flow == DataFlow.Render && role == Role.Multimedia)
             {
-                this.deviceWatcher = new ManagementEventWatcher(
-                    new WqlEventQuery("SELECT * FROM Win32_DeviceChangeEvent WHERE EventType = 2"));
+                Debug.WriteLine("Default playback device changed in Windows. Re-initializing output.");
 
-                this.deviceWatcher.EventArrived += (sender, args) =>
+                // Re-initialize output device with the current wave provider (if any)
+                if (this.currentWaveProvider != null)
                 {
-                    Console.WriteLine("Audio device change detected. Switching output device...");
-
-                    // Re-initialize output device with the current wave provider
-                    if (this.output != null && this.output.PlaybackState == PlaybackState.Playing)
-                    {
-                        this.output.Stop();
-                        this.output.Dispose();
-
-                        if (this.currentWaveProvider != null)
-                        {
-                            InitializeOutputDevice(this.currentWaveProvider);
-                        }
-                    }
-                };
-
-                this.deviceWatcher.Start();
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Failed to start audio device watcher: {ex.Message}");
+                    this.output?.Stop();
+                    this.output?.Dispose();
+                    InitializeOutputDevice(this.currentWaveProvider);
+                }
             }
         }
+
+        public void OnDeviceAdded(string pwstrDeviceId) { }
+        public void OnDeviceRemoved(string deviceId) { }
+        public void OnDeviceStateChanged(string deviceId, DeviceState newState) { }
+        public void OnPropertyValueChanged(string pwstrDeviceId, PropertyKey key) { }
+
+        #endregion
 
         /// <summary>
         /// Sets up the WasapiOut device with the given wave provider, disposing the old one if present.
@@ -256,8 +261,15 @@ namespace ScreamReader
                 this.output.Dispose();
             }
 
+            // Create a WasapiOut associated with the *current* default device
+            // so that each time the default device changes, we can switch.
+            using (var mmDeviceEnum = new MMDeviceEnumerator())
+            {
+                var device = mmDeviceEnum.GetDefaultAudioEndpoint(DataFlow.Render, Role.Multimedia);
+                this.output = new WasapiOut(device, AudioClientShareMode.Shared, false, 50);
+            }
+
             this.currentWaveProvider = waveProvider;
-            this.output = new WasapiOut();
             this.output.Init(this.currentWaveProvider);
             this.output.Volume = (float)this.volume / 100f;
             this.output.Play();
@@ -276,8 +288,9 @@ namespace ScreamReader
             {
                 try
                 {
-                    this.deviceWatcher?.Stop();
-                    this.deviceWatcher?.Dispose();
+                    // Unregister from device notifications
+                    this.deviceEnumerator?.UnregisterEndpointNotificationCallback(this);
+                    this.deviceEnumerator?.Dispose();
                 }
                 catch { /* ignore */ }
 
