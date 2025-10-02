@@ -287,6 +287,17 @@ namespace ScreamReader
             }
         }
 
+        /// <summary>
+        /// Démarre la lecture audio automatiquement (appelé au démarrage de l'application)
+        /// </summary>
+        public void StartAudioAutomatically()
+        {
+            if (!isPlaying)
+            {
+                StartAudio();
+            }
+        }
+
         private void btnPlayStop_Click(object sender, EventArgs e)
         {
             if (isPlaying)

@@ -47,6 +47,24 @@ namespace ScreamReader
         #endregion
         
         /// <summary>
+        /// Vérifie si c'est la première exécution (pas de config dans le registre)
+        /// </summary>
+        public static bool IsFirstRun()
+        {
+            try
+            {
+                using (RegistryKey key = Registry.CurrentUser.OpenSubKey(REGISTRY_KEY_PATH, false))
+                {
+                    return key == null; // Première exécution si la clé n'existe pas
+                }
+            }
+            catch
+            {
+                return true; // En cas d'erreur, considérer comme première exécution
+            }
+        }
+        
+        /// <summary>
         /// Charge la configuration depuis le registre
         /// </summary>
         public static void Load()
