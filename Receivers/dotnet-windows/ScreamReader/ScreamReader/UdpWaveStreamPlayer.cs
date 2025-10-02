@@ -1,4 +1,4 @@
-﻿using NAudio.Wave;
+using NAudio.Wave;
 using NAudio.CoreAudioApi;      // For MMDeviceEnumerator & IMMNotificationClient
 using System;
 using System.Diagnostics;
@@ -23,7 +23,7 @@ namespace ScreamReader
 
         private MMDeviceEnumerator deviceEnumerator; // For default device change notifications
 
-        private int volume;
+        private int volume = 50; // Default volume to 50% instead of 0%
 
         // Fields to store constructor parameters
         protected int BitWidth { get; set; }
@@ -76,15 +76,23 @@ namespace ScreamReader
                 ExclusiveAddressUse = false
             };
 
+            // Initialize volume with current system volume instead of default
+            // We'll set this after the device enumerator is created
+
             // Set up device enumerator for default device change notifications
             try
             {
                 this.deviceEnumerator = new MMDeviceEnumerator();
                 this.deviceEnumerator.RegisterEndpointNotificationCallback(this);
+                
+                // Now initialize volume with current system volume
+                this.volume = GetCurrentSystemVolume();
             }
             catch (Exception ex)
             {
                 Debug.WriteLine($"[UdpWaveStreamPlayer] Failed to register device notifications: {ex.Message}");
+                // Fallback to default volume if we can't get system volume
+                this.volume = 50;
             }
         }
 
@@ -136,7 +144,7 @@ namespace ScreamReader
                     var rsws = new BufferedWaveProvider(
                         new WaveFormat(this.SampleRate, this.BitWidth, this.ChannelCount))
                     {
-                        BufferDuration = TimeSpan.FromMilliseconds(100),
+                        BufferDuration = TimeSpan.FromMilliseconds(20), // Reduced from 100ms to 20ms for lower latency
                         DiscardOnBufferOverflow = true
                     };
 
@@ -173,7 +181,7 @@ namespace ScreamReader
 
                                 rsws = new BufferedWaveProvider(new WaveFormat(newRate, currentWidth, currentChannels))
                                 {
-                                    BufferDuration = TimeSpan.FromMilliseconds(100),
+                                    BufferDuration = TimeSpan.FromMilliseconds(20), // Reduced from 100ms to 20ms for lower latency
                                     DiscardOnBufferOverflow = true
                                 };
 
@@ -230,11 +238,18 @@ namespace ScreamReader
             {
                 Debug.WriteLine("Default playback device changed in Windows. Re-initializing output.");
 
+                // Store current volume before re-initializing
+                int currentVolume = this.volume;
+
                 // Re-initialize output device with the current wave provider (if any)
                 if (this.currentWaveProvider != null)
                 {
                     this.output?.Stop();
                     this.output?.Dispose();
+                    
+                    // Update volume to current system volume for the new device
+                    this.volume = GetCurrentSystemVolume();
+                    
                     InitializeOutputDevice(this.currentWaveProvider);
                 }
             }
@@ -246,6 +261,26 @@ namespace ScreamReader
         public void OnPropertyValueChanged(string pwstrDeviceId, PropertyKey key) { }
 
         #endregion
+
+        /// <summary>
+        /// Gets the current system volume level for the default audio device.
+        /// </summary>
+        private int GetCurrentSystemVolume()
+        {
+            try
+            {
+                using (var mmDeviceEnum = new MMDeviceEnumerator())
+                {
+                    var device = mmDeviceEnum.GetDefaultAudioEndpoint(DataFlow.Render, Role.Multimedia);
+                    return (int)(device.AudioEndpointVolume.MasterScalarVolume * 100);
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"[UdpWaveStreamPlayer] Failed to get system volume: {ex.Message}");
+                return 50; // Default to 50% if we can't get the system volume
+            }
+        }
 
         /// <summary>
         /// Sets up the WasapiOut device with the given wave provider, disposing the old one if present.
@@ -266,7 +301,19 @@ namespace ScreamReader
             using (var mmDeviceEnum = new MMDeviceEnumerator())
             {
                 var device = mmDeviceEnum.GetDefaultAudioEndpoint(DataFlow.Render, Role.Multimedia);
-                this.output = new WasapiOut(device, AudioClientShareMode.Shared, false, 100);
+                
+                try
+                {
+                    // Try Exclusive mode first for minimal latency
+                    this.output = new WasapiOut(device, AudioClientShareMode.Exclusive, false, 10);
+                    Debug.WriteLine("[UdpWaveStreamPlayer] Using Exclusive mode for minimal latency");
+                }
+                catch (Exception ex)
+                {
+                    Debug.WriteLine($"[UdpWaveStreamPlayer] Exclusive mode failed: {ex.Message}. Falling back to Shared mode.");
+                    // Fallback to Shared mode if Exclusive fails
+                    this.output = new WasapiOut(device, AudioClientShareMode.Shared, false, 20);
+                }
             }
 
             this.currentWaveProvider = waveProvider;
