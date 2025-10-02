@@ -231,6 +231,10 @@ namespace ScreamReader
         {
             // Display startup information
             LogManager.Log("ScreamReader starting...");
+            LogManager.Log($"Network mode: {(multicast ? "Multicast" : "Unicast")}");
+            LogManager.Log($"IP Address: {ipAddress}");
+            LogManager.Log($"Port: {port}");
+            LogManager.Log($"Audio format: {bitWidth}bit, {rate}Hz, {channels} channels");
             LogManager.Log($"Audio mode: {(useExclusiveMode ? "Exclusive" : "Shared")}");
             LogManager.Log($"Buffer duration: {(bufferDuration > 0 ? bufferDuration + "ms" : "auto-detect")}");
             LogManager.Log($"WasapiOut latency: {(wasapiLatency > 0 ? wasapiLatency + "ms" : "auto-detect")}");
@@ -284,7 +288,6 @@ namespace ScreamReader
 
             trayMenu.MenuItems.Add("-"); // Separator
             trayMenu.MenuItems.Add("View Logs", this.OnViewLogs);
-            trayMenu.MenuItems.Add("Clear Logs", this.OnClearLogs);
             trayMenu.MenuItems.Add("-"); // Separator
             trayMenu.MenuItems.Add("Exit", this.OnExit);
         }
@@ -294,14 +297,6 @@ namespace ScreamReader
             LogManager.ShowLogWindow();
         }
 
-        private void OnClearLogs(object sender, EventArgs e)
-        {
-            var result = MessageBox.Show("Are you sure you want to clear all logs?", "Clear Logs", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
-            if (result == DialogResult.Yes)
-            {
-                LogManager.ClearLogs();
-            }
-        }
 
         private void OnExit(object sender, EventArgs e)
         {

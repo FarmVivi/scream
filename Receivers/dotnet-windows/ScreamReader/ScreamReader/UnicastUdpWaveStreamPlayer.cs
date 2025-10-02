@@ -47,11 +47,11 @@ namespace ScreamReader
         protected override void ConfigureUdpClient(UdpClient udpClient, IPEndPoint localEp)
         {
             localEp = new IPEndPoint(this.localAddress, this.unicastPort);
+            LogManager.Log($"[UnicastUdpWaveStreamPlayer] Binding to unicast address {this.localAddress}:{this.unicastPort}");
 
             udpClient.Client.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
             udpClient.Client.Bind(localEp);
-
-            Console.WriteLine($"Listening for unicast packets on {localEp.Address}:{localEp.Port}");
+            LogManager.Log($"[UnicastUdpWaveStreamPlayer] Successfully bound to {localEp.Address}:{localEp.Port}");
         }
     }
 }

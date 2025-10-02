@@ -78,6 +78,9 @@ namespace ScreamReader
             {
                 ExclusiveAddressUse = false
             };
+            
+            // Set receive timeout to detect if no data is coming
+            this.udpClient.Client.ReceiveTimeout = 10000; // 10 seconds timeout
 
             // Initialize volume with current system volume instead of default
             // We'll set this after the device enumerator is created
@@ -137,6 +140,8 @@ namespace ScreamReader
         /// </summary>
         public virtual void Start()
         {
+            LogManager.Log("[UdpWaveStreamPlayer] Starting UDP audio stream...");
+            
             // Prevent multiple calls without stopping
             this.startLock.WaitOne();
 
@@ -149,7 +154,9 @@ namespace ScreamReader
                 try
                 {
                     IPEndPoint localEp = null;
+                    LogManager.Log("[UdpWaveStreamPlayer] Configuring UDP client...");
                     ConfigureUdpClient(this.udpClient, localEp);
+                    LogManager.Log($"[UdpWaveStreamPlayer] UDP client configured, listening on {localEp}");
 
                     // Use the user-specified format initially.
                     byte currentRate = (byte)((this.SampleRate == 44100) ? 129 : 1);
@@ -169,12 +176,29 @@ namespace ScreamReader
 
                     InitializeOutputDevice(rsws);
 
+                    LogManager.Log("[UdpWaveStreamPlayer] Starting UDP receive loop...");
+                    LogManager.Log("[UdpWaveStreamPlayer] Waiting for audio data...");
+                    
+                    int packetCount = 0;
                     // Start reading loop
                     while (!this.cancellationTokenSource.IsCancellationRequested)
                     {
                         try
                         {
                             byte[] data = this.udpClient.Receive(ref localEp);
+                            packetCount++;
+                            if (packetCount <= 5) // Log first 5 packets in detail
+                            {
+                                LogManager.Log($"[UdpWaveStreamPlayer] Received packet #{packetCount}: {data.Length} bytes from {localEp}");
+                                if (data.Length >= 5)
+                                {
+                                    LogManager.Log($"[UdpWaveStreamPlayer] Header: rate={data[0]}, width={data[1]}, channels={data[2]}, map_lsb={data[3]}, map_msb={data[4]}");
+                                }
+                            }
+                            else if (packetCount % 100 == 0) // Log every 100th packet
+                            {
+                                LogManager.Log($"[UdpWaveStreamPlayer] Received {packetCount} packets so far...");
+                            }
 
                             // Ensure data is long enough for the Scream protocol header
                             if (data.Length < 5)
@@ -210,10 +234,18 @@ namespace ScreamReader
                             // Add samples (starting after the 5-byte header)
                             rsws.AddSamples(data, 5, data.Length - 5);
                         }
-                        catch (SocketException)
+                        catch (SocketException ex)
                         {
-                            // Thrown if udpClient is closed or on cancellation
-                            break;
+                            if (ex.SocketErrorCode == SocketError.TimedOut)
+                            {
+                                LogManager.Log("[UdpWaveStreamPlayer] No data received for 10 seconds - check if Scream is sending data");
+                                continue; // Continue waiting
+                            }
+                            else
+                            {
+                                LogManager.Log($"[UdpWaveStreamPlayer] Socket error: {ex.SocketErrorCode} - {ex.Message}");
+                                break; // Other socket errors - exit
+                            }
                         }
                         catch (Exception ex)
                         {
@@ -427,6 +459,15 @@ namespace ScreamReader
             {
                 throw new InvalidOperationException($"Failed to initialize WasapiOut with {shareMode} mode and any latency setting");
             }
+
+            this.currentWaveProvider = waveProvider;
+            LogManager.Log("[UdpWaveStreamPlayer] Initializing WasapiOut with wave provider...");
+            this.output.Init(this.currentWaveProvider);
+            LogManager.Log("[UdpWaveStreamPlayer] Setting volume...");
+            this.output.Volume = (float)this.volume / 100f;
+            LogManager.Log("[UdpWaveStreamPlayer] Starting audio playback...");
+            this.output.Play();
+            LogManager.Log("[UdpWaveStreamPlayer] Audio playback started successfully");
         }
 
         #region dispose

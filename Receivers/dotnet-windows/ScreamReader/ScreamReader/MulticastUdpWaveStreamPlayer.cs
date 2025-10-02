@@ -47,10 +47,12 @@ namespace ScreamReader
         protected override void ConfigureUdpClient(UdpClient udpClient, IPEndPoint localEp)
         {
             localEp = new IPEndPoint(IPAddress.Any, this.multicastPort);
+            LogManager.Log($"[MulticastUdpWaveStreamPlayer] Binding to multicast address {this.multicastAddress}:{this.multicastPort}");
 
             udpClient.Client.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
             udpClient.Client.Bind(localEp);
             udpClient.JoinMulticastGroup(this.multicastAddress);
+            LogManager.Log($"[MulticastUdpWaveStreamPlayer] Successfully joined multicast group {this.multicastAddress}");
         }
     }
 }
