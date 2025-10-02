@@ -46,7 +46,7 @@ namespace ScreamReader
                 {
                     this.volume = (int)(this.output.Volume * 100);
                 }
-                Debug.WriteLine("get Volume = {0}", this.volume);
+                Console.WriteLine("get Volume = {0}", this.volume);
                 return this.volume;
             }
             set
@@ -58,7 +58,7 @@ namespace ScreamReader
                 if (this.output != null)
                 {
                     this.output.Volume = (float)value / 100f;
-                    Debug.WriteLine("set Volume = {0}", this.volume);
+                    Console.WriteLine("set Volume = {0}", this.volume);
                 }
             }
         }
@@ -93,7 +93,7 @@ namespace ScreamReader
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"[UdpWaveStreamPlayer] Failed to register device notifications: {ex.Message}");
+                Console.WriteLine($"[UdpWaveStreamPlayer] Failed to register device notifications: {ex.Message}");
                 // Fallback to default volume if we can't get system volume
                 this.volume = 50;
             }
@@ -255,7 +255,7 @@ namespace ScreamReader
             // or you might also want to check for "Console" or "Communications"
             if (flow == DataFlow.Render && role == Role.Multimedia)
             {
-                Debug.WriteLine("Default playback device changed in Windows. Re-initializing output.");
+                Console.WriteLine("Default playback device changed in Windows. Re-initializing output.");
 
                 // Store current volume before re-initializing
                 int currentVolume = this.volume;
@@ -289,7 +289,7 @@ namespace ScreamReader
             // Use user-specified value if provided
             if (this.BufferDuration > 0)
             {
-                Debug.WriteLine($"[UdpWaveStreamPlayer] Using user-specified buffer duration: {this.BufferDuration}ms");
+                Console.WriteLine($"[UdpWaveStreamPlayer] Using user-specified buffer duration: {this.BufferDuration}ms");
                 return TimeSpan.FromMilliseconds(this.BufferDuration);
             }
 
@@ -307,20 +307,20 @@ namespace ScreamReader
                     // For high sample rates (48kHz+), we can use smaller buffers
                     if (format.SampleRate >= 48000)
                     {
-                        Debug.WriteLine("[UdpWaveStreamPlayer] Auto-detected: Using 20ms buffer for high-quality device");
+                        Console.WriteLine("[UdpWaveStreamPlayer] Auto-detected: Using 20ms buffer for high-quality device");
                         return TimeSpan.FromMilliseconds(20); // Conservative for stability
                     }
                     else
                     {
-                        Debug.WriteLine("[UdpWaveStreamPlayer] Auto-detected: Using 50ms buffer for standard device");
+                        Console.WriteLine("[UdpWaveStreamPlayer] Auto-detected: Using 50ms buffer for standard device");
                         return TimeSpan.FromMilliseconds(50); // More conservative for lower sample rates
                     }
                 }
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"[UdpWaveStreamPlayer] Failed to detect optimal buffer duration: {ex.Message}");
-                Debug.WriteLine("[UdpWaveStreamPlayer] Using safe fallback: 50ms buffer");
+                Console.WriteLine($"[UdpWaveStreamPlayer] Failed to detect optimal buffer duration: {ex.Message}");
+                Console.WriteLine("[UdpWaveStreamPlayer] Using safe fallback: 50ms buffer");
                 return TimeSpan.FromMilliseconds(50); // Safe fallback for stability
             }
         }
@@ -340,7 +340,7 @@ namespace ScreamReader
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"[UdpWaveStreamPlayer] Failed to get system volume: {ex.Message}");
+                Console.WriteLine($"[UdpWaveStreamPlayer] Failed to get system volume: {ex.Message}");
                 return 50; // Default to 50% if we can't get the system volume
             }
         }
@@ -367,7 +367,7 @@ namespace ScreamReader
                 
                 // Determine share mode
                 var shareMode = this.UseExclusiveMode ? AudioClientShareMode.Exclusive : AudioClientShareMode.Shared;
-                Debug.WriteLine($"[UdpWaveStreamPlayer] UseExclusiveMode = {this.UseExclusiveMode}, using {shareMode} mode");
+                Console.WriteLine($"[UdpWaveStreamPlayer] UseExclusiveMode = {this.UseExclusiveMode}, using {shareMode} mode");
                 
                 // Use user-specified latency if provided, otherwise auto-detect
                 if (this.WasapiLatency > 0)
@@ -375,12 +375,12 @@ namespace ScreamReader
                     try
                     {
                         this.output = new WasapiOut(device, shareMode, false, this.WasapiLatency);
-                        Debug.WriteLine($"[UdpWaveStreamPlayer] Using user-specified {shareMode} mode with {this.WasapiLatency}ms latency");
+                        Console.WriteLine($"[UdpWaveStreamPlayer] Using user-specified {shareMode} mode with {this.WasapiLatency}ms latency");
                     }
                     catch (Exception ex)
                     {
-                        Debug.WriteLine($"[UdpWaveStreamPlayer] Failed with user-specified latency: {ex.Message}");
-                        Debug.WriteLine("[UdpWaveStreamPlayer] Falling back to auto-detection...");
+                        Console.WriteLine($"[UdpWaveStreamPlayer] Failed with user-specified latency: {ex.Message}");
+                        Console.WriteLine("[UdpWaveStreamPlayer] Falling back to auto-detection...");
                         InitializeWithAutoDetection(device, shareMode);
                     }
                 }
@@ -408,13 +408,13 @@ namespace ScreamReader
                 try
                 {
                     this.output = new WasapiOut(device, shareMode, false, latency);
-                    Debug.WriteLine($"[UdpWaveStreamPlayer] Auto-detected: Using {shareMode} mode with {latency}ms latency");
+                    Console.WriteLine($"[UdpWaveStreamPlayer] Auto-detected: Using {shareMode} mode with {latency}ms latency");
                     success = true;
                     break;
                 }
                 catch (Exception ex)
                 {
-                    Debug.WriteLine($"[UdpWaveStreamPlayer] Failed to initialize with {latency}ms latency: {ex.Message}");
+                    Console.WriteLine($"[UdpWaveStreamPlayer] Failed to initialize with {latency}ms latency: {ex.Message}");
                     if (this.output != null)
                     {
                         this.output.Dispose();

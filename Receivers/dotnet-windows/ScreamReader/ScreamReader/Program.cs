@@ -30,6 +30,8 @@ namespace ScreamReader
                 if (lowerArg == "--help" || lowerArg == "-h")
                 {
                     ShowHelp();
+                    Console.WriteLine("\nPress any key to exit...");
+                    Console.ReadKey();
                     Environment.Exit(0);
                     break;
                 }
