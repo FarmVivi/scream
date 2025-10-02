@@ -29,11 +29,6 @@ namespace ScreamReader
         private System.Windows.Forms.NumericUpDown numWasapiLatency;
         private System.Windows.Forms.CheckBox chkExclusiveMode;
 
-        // Volume
-        private System.Windows.Forms.Label lblVolumeLabel;
-        private System.Windows.Forms.TrackBar trackBarVolume;
-        private System.Windows.Forms.Label lblVolume;
-
         // Stats GroupBox
         private System.Windows.Forms.GroupBox grpStats;
         private System.Windows.Forms.Label lblConnectionStatusLabel;
@@ -189,17 +184,6 @@ namespace ScreamReader
             chkExclusiveMode = new System.Windows.Forms.CheckBox { Text = "Mode Exclusif", AutoSize = true };
             chkExclusiveMode.CheckedChanged += OnConfigChanged;
 
-            // Volume
-            lblVolumeLabel = new System.Windows.Forms.Label { Text = "🔊 Volume:", AutoSize = true };
-            trackBarVolume = new System.Windows.Forms.TrackBar();
-            trackBarVolume.Minimum = 0;
-            trackBarVolume.Maximum = 100;
-            trackBarVolume.Value = 50;
-            trackBarVolume.TickFrequency = 10;
-            trackBarVolume.Width = 200;
-            trackBarVolume.Scroll += trackBarVolume_Scroll;
-            lblVolume = new System.Windows.Forms.Label { Text = "50%", AutoSize = true };
-
             // Stats Group
             grpStats = new System.Windows.Forms.GroupBox();
             grpStats.Text = "📊 Statistiques en temps réel";
@@ -317,18 +301,12 @@ namespace ScreamReader
             gy += lineHeight;
 
             chkExclusiveMode.Location = new System.Drawing.Point(10, gy);
-            gy += lineHeight + 5;
-
-            lblVolumeLabel.Location = new System.Drawing.Point(10, gy);
-            trackBarVolume.Location = new System.Drawing.Point(80, gy - 5);
-            lblVolume.Location = new System.Drawing.Point(290, gy);
 
             grpConfig.Controls.AddRange(new System.Windows.Forms.Control[] {
                 lblIpAddress, txtIpAddress, lblPort, numPort, radioMulticast, radioUnicast,
                 chkAutoDetectFormat, lblDetectedFormat,
                 lblBitWidth, numBitWidth, lblSampleRate, numSampleRate, lblChannels, numChannels,
-                chkAutoBuffer, numBufferDuration, chkAutoWasapi, numWasapiLatency, chkExclusiveMode,
-                lblVolumeLabel, trackBarVolume, lblVolume
+                chkAutoBuffer, numBufferDuration, chkAutoWasapi, numWasapiLatency, chkExclusiveMode
             });
             this.Controls.Add(grpConfig);
 

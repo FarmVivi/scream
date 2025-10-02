@@ -49,9 +49,6 @@ namespace ScreamReader
             // Appliquer le niveau de log sauvegardé
             LogManager.SetMinimumLevel(ConfigurationManager.MinimumLogLevel);
             
-            // Appliquer le volume sauvegardé
-            trackBarVolume.Value = ConfigurationManager.Volume;
-            
             // Configurer l'auto-détection de format (par défaut true)
             UpdateFormatControlsState();
         }
@@ -166,9 +163,6 @@ namespace ScreamReader
             
             // Sauvegarder la configuration du stream
             ConfigurationManager.UpdateFromStreamConfiguration(currentConfig);
-            
-            // Sauvegarder le volume
-            ConfigurationManager.Volume = trackBarVolume.Value;
             
             // Sauvegarder le niveau de log
             ConfigurationManager.MinimumLogLevel = LogManager.GetMinimumLevel();
@@ -416,9 +410,6 @@ namespace ScreamReader
                         LogManager.LogDebug("[AudioReceiverWindow] Mode auto - Adaptations préservées");
                     }
                 }
-
-                // Set volume
-                audioPlayer.Volume = trackBarVolume.Value;
 
                 // Start playback
                 audioPlayer.Start();
@@ -677,19 +668,6 @@ namespace ScreamReader
             lblBitWidth.ForeColor = labelColor;
             lblSampleRate.ForeColor = labelColor;
             lblChannels.ForeColor = labelColor;
-        }
-
-        private void trackBarVolume_Scroll(object sender, EventArgs e)
-        {
-            lblVolume.Text = $"{trackBarVolume.Value}%";
-            if (audioPlayer != null)
-            {
-                audioPlayer.Volume = trackBarVolume.Value;
-            }
-            
-            // Sauvegarder le volume dans le registre
-            ConfigurationManager.Volume = trackBarVolume.Value;
-            ConfigurationManager.Save();
         }
 
         private void cmbLogLevel_SelectedIndexChanged(object sender, EventArgs e)

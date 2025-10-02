@@ -36,7 +36,6 @@ namespace ScreamReader
         public static bool UseExclusiveMode { get; set; } = false;
         
         // Application Settings
-        public static int Volume { get; set; } = 50;
         public static LogLevel MinimumLogLevel { get; set; } = LogLevel.Info;
         
         // Window Settings
@@ -102,7 +101,6 @@ namespace ScreamReader
                     UseExclusiveMode = Convert.ToBoolean(key.GetValue("UseExclusiveMode", UseExclusiveMode));
                     
                     // Application Settings
-                    Volume = (int)key.GetValue("Volume", Volume);
                     MinimumLogLevel = (LogLevel)Enum.Parse(typeof(LogLevel), 
                         key.GetValue("MinimumLogLevel", MinimumLogLevel.ToString()) as string);
                     
@@ -165,7 +163,6 @@ namespace ScreamReader
                     key.SetValue("UseExclusiveMode", UseExclusiveMode, RegistryValueKind.DWord);
                     
                     // Application Settings
-                    key.SetValue("Volume", Volume, RegistryValueKind.DWord);
                     key.SetValue("MinimumLogLevel", MinimumLogLevel.ToString(), RegistryValueKind.String);
                     
                     // Window Settings
@@ -207,7 +204,6 @@ namespace ScreamReader
                 BufferDuration = -1;
                 WasapiLatency = -1;
                 UseExclusiveMode = false;
-                Volume = 50;
                 MinimumLogLevel = LogLevel.Info;
                 WindowSize = new Size(1400, 900);
                 WindowLocation = Point.Empty;

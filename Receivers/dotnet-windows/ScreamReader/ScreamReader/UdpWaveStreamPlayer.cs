@@ -25,8 +25,6 @@ namespace ScreamReader
 
         private MMDeviceEnumerator deviceEnumerator; // For default device change notifications
 
-        private int volume = 50; // Default volume to 50% instead of 0%
-
         // Fields to store constructor parameters
         protected int BitWidth { get; set; }
         protected int SampleRate { get; set; }
@@ -56,33 +54,7 @@ namespace ScreamReader
         #endregion
 
         #region public properties
-        /// <summary>
-        /// Volume property in [0..100].
-        /// </summary>
-        public int Volume
-        {
-            get
-            {
-                if (this.output != null)
-                {
-                    this.volume = (int)(this.output.Volume * 100);
-                }
-                LogManager.Log($"get Volume = {this.volume}");
-                return this.volume;
-            }
-            set
-            {
-                if (value < 0 || value > 100)
-                    throw new ArgumentOutOfRangeException(nameof(value));
-
-                this.volume = value;
-                if (this.output != null)
-                {
-                    this.output.Volume = (float)value / 100f;
-                    LogManager.Log($"set Volume = {this.volume}");
-                }
-            }
-        }
+        // Volume control removed - use system volume instead
         #endregion
 
         #region constructors
@@ -106,23 +78,15 @@ namespace ScreamReader
             // Set receive timeout to detect if no data is coming
             this.udpClient.Client.ReceiveTimeout = 10000; // 10 seconds timeout
 
-            // Initialize volume with current system volume instead of default
-            // We'll set this after the device enumerator is created
-
             // Set up device enumerator for default device change notifications
             try
             {
                 this.deviceEnumerator = new MMDeviceEnumerator();
                 this.deviceEnumerator.RegisterEndpointNotificationCallback(this);
-                
-                // Now initialize volume with current system volume
-                this.volume = GetCurrentSystemVolume();
             }
             catch (Exception ex)
             {
                 LogManager.Log($"[UdpWaveStreamPlayer] Failed to register device notifications: {ex.Message}");
-                // Fallback to default volume if we can't get system volume
-                this.volume = 50;
             }
         }
         
@@ -648,17 +612,11 @@ namespace ScreamReader
             {
                 LogManager.Log("Default playback device changed in Windows. Re-initializing output.");
 
-                // Store current volume before re-initializing
-                int currentVolume = this.volume;
-
                 // Re-initialize output device with the current wave provider (if any)
                 if (this.currentWaveProvider != null)
                 {
                     this.output?.Stop();
                     this.output?.Dispose();
-                    
-                    // Update volume to current system volume for the new device
-                    this.volume = GetCurrentSystemVolume();
                     
                     InitializeOutputDevice(this.currentWaveProvider);
                 }
@@ -673,26 +631,6 @@ namespace ScreamReader
         #endregion
 
 
-
-        /// <summary>
-        /// Gets the current system volume level for the default audio device.
-        /// </summary>
-        private int GetCurrentSystemVolume()
-        {
-            try
-            {
-                using (var mmDeviceEnum = new MMDeviceEnumerator())
-                {
-                    var device = mmDeviceEnum.GetDefaultAudioEndpoint(DataFlow.Render, Role.Multimedia);
-                    return (int)(device.AudioEndpointVolume.MasterVolumeLevelScalar * 100);
-                }
-            }
-            catch (Exception ex)
-            {
-                LogManager.Log($"[UdpWaveStreamPlayer] Failed to get system volume: {ex.Message}");
-                return 50; // Default to 50% if we can't get the system volume
-            }
-        }
 
         /// <summary>
         /// Sets up the WasapiOut device with the given wave provider, disposing the old one if present.
@@ -759,7 +697,6 @@ namespace ScreamReader
 
             this.currentWaveProvider = waveProvider;
             this.output.Init(this.currentWaveProvider);
-            this.output.Volume = (float)this.volume / 100f;
             
             // NE PAS appeler Play() ici - le pré-buffering le fera automatiquement
             // quand le buffer sera suffisamment rempli
