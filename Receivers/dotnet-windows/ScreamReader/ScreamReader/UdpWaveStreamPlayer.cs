@@ -1,4 +1,4 @@
-﻿using NAudio.Wave;
+using NAudio.Wave;
 using NAudio.CoreAudioApi;      // For MMDeviceEnumerator & IMMNotificationClient
 using System;
 using System.Diagnostics;
@@ -23,7 +23,7 @@ namespace ScreamReader
 
         private MMDeviceEnumerator deviceEnumerator; // For default device change notifications
 
-        private int volume;
+        private int volume = 100; // Default volume at 100%
 
         // Fields to store constructor parameters
         protected int BitWidth { get; set; }
@@ -136,7 +136,7 @@ namespace ScreamReader
                     var rsws = new BufferedWaveProvider(
                         new WaveFormat(this.SampleRate, this.BitWidth, this.ChannelCount))
                     {
-                        BufferDuration = TimeSpan.FromMilliseconds(100),
+                        BufferDuration = TimeSpan.FromMilliseconds(20),
                         DiscardOnBufferOverflow = true
                     };
 
@@ -173,7 +173,7 @@ namespace ScreamReader
 
                                 rsws = new BufferedWaveProvider(new WaveFormat(newRate, currentWidth, currentChannels))
                                 {
-                                    BufferDuration = TimeSpan.FromMilliseconds(100),
+                                    BufferDuration = TimeSpan.FromMilliseconds(20),
                                     DiscardOnBufferOverflow = true
                                 };
 
@@ -266,7 +266,7 @@ namespace ScreamReader
             using (var mmDeviceEnum = new MMDeviceEnumerator())
             {
                 var device = mmDeviceEnum.GetDefaultAudioEndpoint(DataFlow.Render, Role.Multimedia);
-                this.output = new WasapiOut(device, AudioClientShareMode.Shared, false, 100);
+                this.output = new WasapiOut(device, AudioClientShareMode.Shared, false, 20);
             }
 
             this.currentWaveProvider = waveProvider;
