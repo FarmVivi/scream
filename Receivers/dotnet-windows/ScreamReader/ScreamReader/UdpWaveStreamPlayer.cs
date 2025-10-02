@@ -160,6 +160,60 @@ namespace ScreamReader
         }
         #endregion
 
+        #region Public Methods for Configuration
+        
+        /// <summary>
+        /// Obtient la durée actuelle du buffer réseau (adaptée ou manuelle)
+        /// </summary>
+        public int GetCurrentBufferDuration()
+        {
+            return this.bufferManager != null ? (int)this.bufferManager.CurrentBufferDurationMs : this.BufferDuration;
+        }
+
+        /// <summary>
+        /// Obtient la latence WASAPI actuelle (adaptée ou manuelle)
+        /// </summary>
+        public int GetCurrentWasapiLatency()
+        {
+            return this.bufferManager != null ? (int)this.bufferManager.CurrentWasapiLatencyMs : this.WasapiLatency;
+        }
+
+        /// <summary>
+        /// Met à jour les paramètres manuels du buffer et WASAPI
+        /// Utilisé quand l'utilisateur change les valeurs en mode manuel
+        /// </summary>
+        public void UpdateManualSettings(int bufferDuration, int wasapiLatency)
+        {
+            if (bufferDuration > 0)
+            {
+                this.BufferDuration = bufferDuration;
+                LogManager.LogDebug($"[UdpWaveStreamPlayer] BufferDuration manuel mis à jour: {bufferDuration}ms");
+            }
+            
+            if (wasapiLatency > 0)
+            {
+                this.WasapiLatency = wasapiLatency;
+                LogManager.LogDebug($"[UdpWaveStreamPlayer] WasapiLatency manuel mis à jour: {wasapiLatency}ms");
+            }
+            
+            // Forcer la mise à jour du bufferManager avec les nouvelles valeurs
+            if (this.bufferManager != null && (bufferDuration > 0 || wasapiLatency > 0))
+            {
+                // Recréer le bufferManager avec les nouvelles valeurs manuelles
+                this.bufferManager = new AdaptiveBufferManager(
+                    bufferDuration > 0 ? bufferDuration : (int)this.bufferManager.CurrentBufferDurationMs,
+                    wasapiLatency > 0 ? wasapiLatency : (int)this.bufferManager.CurrentWasapiLatencyMs,
+                    this.UseExclusiveMode,
+                    this.BitWidth,
+                    this.SampleRate
+                );
+                
+                LogManager.LogInfo($"[UdpWaveStreamPlayer] BufferManager recréé avec valeurs manuelles: Buffer={this.bufferManager.CurrentBufferDurationMs}ms, WASAPI={this.bufferManager.CurrentWasapiLatencyMs}ms");
+            }
+        }
+        
+        #endregion
+
         /// <summary>
         /// Abstract method to let derived classes configure the UdpClient (bind, join group, etc.).
         /// </summary>

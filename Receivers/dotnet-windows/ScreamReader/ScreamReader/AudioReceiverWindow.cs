@@ -356,7 +356,28 @@ namespace ScreamReader
                 }
                 else
                 {
-                    LogManager.LogDebug("[AudioReceiverWindow] Réutilisation du player existant (adaptations préservées)");
+                    // Réutilisation du player : appliquer les valeurs selon le mode (Auto/Manuel)
+                    LogManager.LogDebug("[AudioReceiverWindow] Réutilisation du player existant");
+                    
+                    // Si mode MANUEL : toujours appliquer la valeur de l'UI
+                    // Si mode AUTO : garder les adaptations (ne rien faire)
+                    bool isManualMode = !currentConfig.IsAutoBuffer || !currentConfig.IsAutoWasapi;
+                    
+                    if (isManualMode)
+                    {
+                        // Mode manuel : appliquer les valeurs de l'UI à chaque Start
+                        audioPlayer.UpdateManualSettings(
+                            !currentConfig.IsAutoBuffer ? currentConfig.BufferDuration : -1,
+                            !currentConfig.IsAutoWasapi ? currentConfig.WasapiLatency : -1
+                        );
+                        
+                        LogManager.LogInfo($"[AudioReceiverWindow] Mode manuel - Valeurs appliquées: Buffer={(!currentConfig.IsAutoBuffer ? currentConfig.BufferDuration + "ms" : "Auto")}, WASAPI={(!currentConfig.IsAutoWasapi ? currentConfig.WasapiLatency + "ms" : "Auto")}");
+                    }
+                    else
+                    {
+                        // Mode auto : garder les adaptations existantes
+                        LogManager.LogDebug("[AudioReceiverWindow] Mode auto - Adaptations préservées");
+                    }
                 }
 
                 // Set volume
