@@ -135,6 +135,9 @@ namespace ScreamReader
                     byte currentChannelsMapLsb = (this.ChannelCount == 2) ? (byte)0x03 : (byte)0x01;
                     byte currentChannelsMapMsb = 0x00;
 
+                    // BufferedWaveProvider: 20ms buffer to absorb network jitter
+                    // This holds ~3-5 Scream packets (1152 bytes each) depending on format
+                    // Scream recommends ~4 packets minimum for stable playback
                     var rsws = new BufferedWaveProvider(
                         new WaveFormat(this.SampleRate, this.BitWidth, this.ChannelCount))
                     {
@@ -173,6 +176,7 @@ namespace ScreamReader
                                 // Stop old output before re-initializing
                                 this.output?.Stop();
 
+                                // Re-create buffer with new format, maintaining 20ms for network jitter
                                 rsws = new BufferedWaveProvider(new WaveFormat(newRate, currentWidth, currentChannels))
                                 {
                                     BufferDuration = TimeSpan.FromMilliseconds(20),
@@ -267,10 +271,12 @@ namespace ScreamReader
 
             // Create a WasapiOut associated with the *current* default device
             // so that each time the default device changes, we can switch.
+            // Using 10ms latency: BufferedWaveProvider handles network jitter,
+            // WasapiOut only needs to handle CPU scheduling variations
             using (var mmDeviceEnum = new MMDeviceEnumerator())
             {
                 var device = mmDeviceEnum.GetDefaultAudioEndpoint(DataFlow.Render, Role.Multimedia);
-                this.output = new WasapiOut(device, AudioClientShareMode.Shared, false, 20);
+                this.output = new WasapiOut(device, AudioClientShareMode.Shared, false, 10);
             }
 
             this.currentWaveProvider = waveProvider;
