@@ -195,7 +195,7 @@ namespace ScreamReader
                             packetCount++;
                             if (packetCount <= 5) // Log first 5 packets in detail
                             {
-                                LogManager.Log($"[UdpWaveStreamPlayer] Received packet #{packetCount}: {data.Length} bytes from {localEp}");
+                                LogManager.LogDebug($"[UdpWaveStreamPlayer] Received packet #{packetCount}: {data.Length} bytes from {localEp}");
                                 if (data.Length >= 5)
                                 {
                                     LogManager.Log($"[UdpWaveStreamPlayer] Header: rate={data[0]}, width={data[1]}, channels={data[2]}, map_lsb={data[3]}, map_msb={data[4]}");
@@ -205,7 +205,7 @@ namespace ScreamReader
                             {
                                 var elapsed = DateTime.Now - lastLogTime;
                                 var packetsPerSecond = 200.0 / elapsed.TotalSeconds;
-                                LogManager.Log($"[UdpWaveStreamPlayer] Received {packetCount} packets so far... ({packetsPerSecond:F1} packets/sec)");
+                                LogManager.LogDebug($"[UdpWaveStreamPlayer] Received {packetCount} packets so far... ({packetsPerSecond:F1} packets/sec)");
                                 lastLogTime = DateTime.Now;
                             }
 
@@ -248,7 +248,7 @@ namespace ScreamReader
                             {
                                 var bufferedMs = rsws.BufferedDuration.TotalMilliseconds;
                                 var status = bufferedMs < 20 ? "LOW" : bufferedMs > 80 ? "HIGH" : "OK";
-                                LogManager.Log($"[UdpWaveStreamPlayer] BufferedWaveProvider status: {rsws.BufferedBytes} bytes buffered, {bufferedMs:F1}ms buffered ({status})");
+                                LogManager.LogDebug($"[UdpWaveStreamPlayer] BufferedWaveProvider status: {rsws.BufferedBytes} bytes buffered, {bufferedMs:F1}ms buffered ({status})");
                                 
                                 // Adaptive buffer management
                                 if (bufferedMs < 15)

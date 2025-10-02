@@ -8,6 +8,7 @@ namespace ScreamReader
     {
         private TextBox logTextBox;
         private Button playPauseButton;
+        private CheckBox debugLogsCheckBox;
         private Timer autoRefreshTimer;
         private bool isAutoRefreshEnabled = true;
 
@@ -51,7 +52,19 @@ namespace ScreamReader
             };
             playPauseButton.Click += PlayPauseButton_Click;
 
+            // Create debug logs checkbox
+            debugLogsCheckBox = new CheckBox
+            {
+                Text = "Show Debug Logs",
+                Checked = LogManager.GetShowDebugLogs(),
+                Size = new Size(120, 30),
+                Margin = new Padding(5),
+                AutoSize = true
+            };
+            debugLogsCheckBox.CheckedChanged += DebugLogsCheckBox_CheckedChanged;
+
             buttonPanel.Controls.Add(playPauseButton);
+            buttonPanel.Controls.Add(debugLogsCheckBox);
 
             // Create auto-refresh timer
             autoRefreshTimer = new Timer
@@ -119,6 +132,11 @@ namespace ScreamReader
             }
         }
 
+        private void DebugLogsCheckBox_CheckedChanged(object sender, EventArgs e)
+        {
+            LogManager.SetShowDebugLogs(debugLogsCheckBox.Checked);
+        }
+
         private void AutoRefreshTimer_Tick(object sender, EventArgs e)
         {
             if (isAutoRefreshEnabled)
@@ -164,6 +182,17 @@ namespace ScreamReader
             }
 
             logTextBox.Clear();
+        }
+
+        public void RefreshLogs()
+        {
+            if (InvokeRequired)
+            {
+                Invoke(new Action(RefreshLogs));
+                return;
+            }
+
+            LoadLogs();
         }
     }
 }
