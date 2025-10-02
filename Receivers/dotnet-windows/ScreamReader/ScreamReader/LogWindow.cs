@@ -8,7 +8,8 @@ namespace ScreamReader
     {
         private TextBox logTextBox;
         private Button playPauseButton;
-        private CheckBox debugLogsCheckBox;
+        private ComboBox logLevelComboBox;
+        private Button clearButton;
         private Timer autoRefreshTimer;
         private bool isAutoRefreshEnabled = true;
 
@@ -52,19 +53,41 @@ namespace ScreamReader
             };
             playPauseButton.Click += PlayPauseButton_Click;
 
-            // Create debug logs checkbox
-            debugLogsCheckBox = new CheckBox
+            // Create log level label
+            var logLevelLabel = new Label
             {
-                Text = "Show Debug Logs",
-                Checked = LogManager.GetShowDebugLogs(),
-                Size = new Size(120, 30),
+                Text = "Log Level:",
+                AutoSize = true,
                 Margin = new Padding(5),
-                AutoSize = true
+                TextAlign = ContentAlignment.MiddleCenter,
+                Height = 30
             };
-            debugLogsCheckBox.CheckedChanged += DebugLogsCheckBox_CheckedChanged;
+            logLevelLabel.Top = (30 - logLevelLabel.Height) / 2 + 5;
+
+            // Create log level combo box
+            logLevelComboBox = new ComboBox
+            {
+                DropDownStyle = ComboBoxStyle.DropDownList,
+                Width = 100,
+                Margin = new Padding(5)
+            };
+            logLevelComboBox.Items.AddRange(new object[] { "DEBUG", "INFO", "WARNING", "ERROR" });
+            logLevelComboBox.SelectedIndex = (int)LogManager.GetMinimumLogLevel();
+            logLevelComboBox.SelectedIndexChanged += LogLevelComboBox_SelectedIndexChanged;
+
+            // Create clear button
+            clearButton = new Button
+            {
+                Text = "Clear",
+                Size = new Size(80, 30),
+                Margin = new Padding(5)
+            };
+            clearButton.Click += ClearButton_Click;
 
             buttonPanel.Controls.Add(playPauseButton);
-            buttonPanel.Controls.Add(debugLogsCheckBox);
+            buttonPanel.Controls.Add(logLevelLabel);
+            buttonPanel.Controls.Add(logLevelComboBox);
+            buttonPanel.Controls.Add(clearButton);
 
             // Create auto-refresh timer
             autoRefreshTimer = new Timer
@@ -132,9 +155,15 @@ namespace ScreamReader
             }
         }
 
-        private void DebugLogsCheckBox_CheckedChanged(object sender, EventArgs e)
+        private void LogLevelComboBox_SelectedIndexChanged(object sender, EventArgs e)
         {
-            LogManager.SetShowDebugLogs(debugLogsCheckBox.Checked);
+            LogManager.SetMinimumLogLevel((LogLevel)logLevelComboBox.SelectedIndex);
+            LoadLogs();
+        }
+
+        private void ClearButton_Click(object sender, EventArgs e)
+        {
+            LogManager.ClearLogs();
         }
 
         private void AutoRefreshTimer_Tick(object sender, EventArgs e)
@@ -156,18 +185,18 @@ namespace ScreamReader
             }
         }
 
-        public void AddLog(string logEntry)
+        public void AddLog(LogEntry logEntry)
         {
             if (InvokeRequired)
             {
-                Invoke(new Action<string>(AddLog), logEntry);
+                Invoke(new Action<LogEntry>(AddLog), logEntry);
                 return;
             }
 
-            // Only add to text box if auto-refresh is enabled
-            if (isAutoRefreshEnabled)
+            // Only add to text box if auto-refresh is enabled and level is sufficient
+            if (isAutoRefreshEnabled && logEntry.Level >= LogManager.GetMinimumLogLevel())
             {
-                logTextBox.AppendText(logEntry + Environment.NewLine);
+                logTextBox.AppendText(logEntry.ToString() + Environment.NewLine);
                 logTextBox.SelectionStart = logTextBox.Text.Length;
                 logTextBox.ScrollToCaret();
             }

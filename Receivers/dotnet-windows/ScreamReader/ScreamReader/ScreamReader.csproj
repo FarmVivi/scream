@@ -65,6 +65,9 @@
       <DependentUpon>About.cs</DependentUpon>
     </Compile>
     <Compile Include="AdaptiveBufferManager.cs" />
+    <Compile Include="ControlPanel.cs">
+      <SubType>Form</SubType>
+    </Compile>
     <Compile Include="MainForm.cs">
       <SubType>Form</SubType>
     </Compile>

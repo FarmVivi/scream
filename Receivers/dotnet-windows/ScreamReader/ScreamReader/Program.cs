@@ -272,7 +272,7 @@ namespace ScreamReader
         protected internal NotifyIcon trayIcon;
         protected ContextMenu trayMenu;
         internal UdpWaveStreamPlayer udpPlayer;
-        private MainForm mainForm;
+        private ControlPanel controlPanel;
 
         public ScreamReaderTray(int bitWidth, int rate, int channels, int port, IPAddress ipAddress, bool multicast, int bufferDuration, int wasapiLatency, bool useExclusiveMode)
         {
@@ -286,7 +286,7 @@ namespace ScreamReader
             }
 
             this.udpPlayer.Start();
-            this.mainForm = new MainForm(this);
+            this.controlPanel = new ControlPanel(this);
             this.trayMenu = new ContextMenu();
 
             this.trayIcon = new NotifyIcon();
@@ -298,18 +298,33 @@ namespace ScreamReader
             this.trayIcon.Visible = true;
             this.trayIcon.DoubleClick += (object sender, EventArgs e) =>
             {
-                if (this.mainForm.Visible)
+                if (this.controlPanel.Visible)
                 {
-                    this.mainForm.Focus();
+                    this.controlPanel.Focus();
                     return;
                 }
-                this.mainForm.ShowDialog(this);
+                this.controlPanel.Show();
+                this.controlPanel.BringToFront();
             };
 
+            trayMenu.MenuItems.Add("Control Panel", this.OnShowControlPanel);
             trayMenu.MenuItems.Add("-"); // Separator
             trayMenu.MenuItems.Add("View Logs", this.OnViewLogs);
             trayMenu.MenuItems.Add("-"); // Separator
             trayMenu.MenuItems.Add("Exit", this.OnExit);
+        }
+
+        private void OnShowControlPanel(object sender, EventArgs e)
+        {
+            if (this.controlPanel.Visible)
+            {
+                this.controlPanel.Focus();
+                this.controlPanel.BringToFront();
+            }
+            else
+            {
+                this.controlPanel.Show();
+            }
         }
 
         private void OnViewLogs(object sender, EventArgs e)

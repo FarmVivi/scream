@@ -499,6 +499,46 @@ namespace ScreamReader
                 this.output?.Dispose();
             }
         }
+
+        /// <summary>
+        /// Gets buffer statistics for display in the UI
+        /// </summary>
+        public string GetBufferStatistics()
+        {
+            if (bufferManager != null)
+            {
+                return bufferManager.GetStatistics();
+            }
+            return "Buffer statistics not available";
+        }
+
+        /// <summary>
+        /// Gets network information for display in the UI
+        /// </summary>
+        public string GetNetworkInfo()
+        {
+            if (udpClient != null && udpClient.Client != null)
+            {
+                try
+                {
+                    var localEp = udpClient.Client.LocalEndPoint;
+                    return $"Listening on {localEp}";
+                }
+                catch
+                {
+                    return "Not connected";
+                }
+            }
+            return "Not initialized";
+        }
+
+        /// <summary>
+        /// Gets audio format information for display in the UI
+        /// </summary>
+        public string GetAudioInfo()
+        {
+            return $"{SampleRate}Hz, {BitWidth}bit, {ChannelCount}ch, {(UseExclusiveMode ? "Exclusive" : "Shared")} mode";
+        }
         #endregion
     }
 }
