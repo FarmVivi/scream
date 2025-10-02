@@ -474,19 +474,6 @@ namespace ScreamReader
             LogManager.Log("[UdpWaveStreamPlayer] Starting audio playback...");
             this.output.Play();
             LogManager.Log("[UdpWaveStreamPlayer] Audio playback started successfully");
-            
-            // Log WasapiOut buffer information
-            try
-            {
-                var audioClient = this.output.AudioClient;
-                var bufferSize = audioClient.BufferSize;
-                var periodSize = audioClient.DefaultDevicePeriod;
-                LogManager.Log($"[UdpWaveStreamPlayer] WasapiOut buffer size: {bufferSize} frames, period: {periodSize.TotalMilliseconds:F1}ms");
-            }
-            catch (Exception ex)
-            {
-                LogManager.Log($"[UdpWaveStreamPlayer] Could not get WasapiOut buffer info: {ex.Message}");
-            }
         }
 
         /// <summary>
