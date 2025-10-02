@@ -248,7 +248,7 @@ namespace ScreamReader
                             {
                                 var bufferedMs = rsws.BufferedDuration.TotalMilliseconds;
                                 var status = bufferedMs < 20 ? "LOW" : bufferedMs > 80 ? "HIGH" : "OK";
-                                LogManager.Log($"[UdpWaveStreamPlayer] Buffer status: {rsws.BufferedBytes} bytes buffered, {bufferedMs:F1}ms buffered ({status})");
+                                LogManager.Log($"[UdpWaveStreamPlayer] BufferedWaveProvider status: {rsws.BufferedBytes} bytes buffered, {bufferedMs:F1}ms buffered ({status})");
                                 
                                 // Adaptive buffer management
                                 if (bufferedMs < 15)
@@ -371,26 +371,25 @@ namespace ScreamReader
                     var audioClient = device.AudioClient;
                     var format = audioClient.MixFormat;
                     
-                    // Optimize buffer size based on bit depth and sample rate
-                    // Use larger buffers for stability with high packet rates
+                    // Use much larger buffers for complete stability with high packet rates
                     if (format.SampleRate >= 48000)
                     {
-                        // For 16bit audio with high packet rates, use larger buffers
+                        // For 16bit audio with high packet rates, use much larger buffers
                         if (this.BitWidth <= 16)
                         {
-                            LogManager.Log("[UdpWaveStreamPlayer] Auto-detected: Using 75ms buffer for 16bit/48kHz (stable)");
-                            return TimeSpan.FromMilliseconds(75);
+                            LogManager.Log("[UdpWaveStreamPlayer] Auto-detected: Using 150ms buffer for 16bit/48kHz (ultra-stable)");
+                            return TimeSpan.FromMilliseconds(150);
                         }
                         else
                         {
-                            LogManager.Log("[UdpWaveStreamPlayer] Auto-detected: Using 100ms buffer for high-bit/48kHz");
-                            return TimeSpan.FromMilliseconds(100);
+                            LogManager.Log("[UdpWaveStreamPlayer] Auto-detected: Using 200ms buffer for high-bit/48kHz");
+                            return TimeSpan.FromMilliseconds(200);
                         }
                     }
                     else
                     {
-                        LogManager.Log("[UdpWaveStreamPlayer] Auto-detected: Using 100ms buffer for standard device");
-                        return TimeSpan.FromMilliseconds(100);
+                        LogManager.Log("[UdpWaveStreamPlayer] Auto-detected: Using 200ms buffer for standard device");
+                        return TimeSpan.FromMilliseconds(200);
                     }
                 }
             }
@@ -475,6 +474,19 @@ namespace ScreamReader
             LogManager.Log("[UdpWaveStreamPlayer] Starting audio playback...");
             this.output.Play();
             LogManager.Log("[UdpWaveStreamPlayer] Audio playback started successfully");
+            
+            // Log WasapiOut buffer information
+            try
+            {
+                var audioClient = this.output.AudioClient;
+                var bufferSize = audioClient.BufferSize;
+                var periodSize = audioClient.DefaultDevicePeriod;
+                LogManager.Log($"[UdpWaveStreamPlayer] WasapiOut buffer size: {bufferSize} frames, period: {periodSize.TotalMilliseconds:F1}ms");
+            }
+            catch (Exception ex)
+            {
+                LogManager.Log($"[UdpWaveStreamPlayer] Could not get WasapiOut buffer info: {ex.Message}");
+            }
         }
 
         /// <summary>
@@ -484,8 +496,8 @@ namespace ScreamReader
         {
             // Try progressively higher latencies until one works
             int[] latencyOptions = shareMode == AudioClientShareMode.Exclusive 
-                ? new int[] { 50, 100, 150, 200 }  // Exclusive mode with higher latencies for stability
-                : new int[] { 100, 150, 200, 300 }; // Shared mode with higher latencies for stability
+                ? new int[] { 100, 200, 300, 400 }  // Exclusive mode with very high latencies for stability
+                : new int[] { 200, 300, 400, 500 }; // Shared mode with very high latencies for stability
             
             bool success = false;
             
