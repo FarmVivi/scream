@@ -61,6 +61,17 @@ namespace ScreamReader
         public bool IsAdaptive => !isUserSpecified;
         public int RecommendedWasapiLatency => recommendedWasapiLatency; // Suggestion après analyse
         public bool HasLongTermAnalysis => hasLongTermAnalysis;
+        
+        // Stats actuelles pour l'UI
+        private double currentNetworkBufferedMs;
+        private double currentNetworkBufferCapacityMs;
+        public double NetworkBufferedMs => currentNetworkBufferedMs;
+        public double NetworkBufferCapacityMs => currentNetworkBufferCapacityMs;
+        public double NetworkBufferFillPercentage => currentNetworkBufferCapacityMs > 0 ? (currentNetworkBufferedMs / currentNetworkBufferCapacityMs) * 100.0 : 0;
+        
+        public double WasapiBufferedMs => actualWasapiLatencyMs; // WASAPI est toujours "plein"
+        public double WasapiBufferCapacityMs => actualWasapiLatencyMs;
+        public double WasapiBufferFillPercentage => 100.0; // WASAPI est toujours considéré plein
         #endregion
 
         public AdaptiveBufferManager(int userBufferDuration, int userWasapiLatency, bool useExclusiveMode, int bitWidth, int sampleRate)
@@ -138,6 +149,10 @@ namespace ScreamReader
         /// </summary>
         public void RecordMeasurement(double bufferedMs, int bufferCapacityMs, int packetCount)
         {
+            // Stocker les valeurs actuelles pour l'UI
+            currentNetworkBufferedMs = bufferedMs;
+            currentNetworkBufferCapacityMs = bufferCapacityMs;
+            
             var measurement = new BufferMeasurement
             {
                 Timestamp = DateTime.Now,
@@ -262,7 +277,7 @@ namespace ScreamReader
 
             lastAdjustmentTime = DateTime.Now;
             
-            LogManager.Log($"[AdaptiveBuffer] 📈 Augmentation des buffers: {reason}");
+            LogManager.Log($"[AdaptiveBuffer] 📈 Augmentation de la latence: {reason}");
             LogManager.Log($"[AdaptiveBuffer]    Buffer: {oldBufferMs}ms → {currentBufferDurationMs}ms (+{currentBufferDurationMs - oldBufferMs}ms)");
             LogManager.Log($"[AdaptiveBuffer]    WASAPI: {oldWasapiMs}ms → {currentWasapiLatencyMs}ms (+{currentWasapiLatencyMs - oldWasapiMs}ms)");
             LogManager.Log($"[AdaptiveBuffer]    Latence totale: {TotalLatencyMs}ms");

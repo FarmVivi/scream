@@ -112,7 +112,7 @@ namespace ScreamReader
             // Play/Stop Button
             btnPlayStop = new System.Windows.Forms.Button();
             btnPlayStop.Size = new System.Drawing.Size(150, 50);
-            btnPlayStop.Font = new System.Drawing.Font("Segoe UI", 14F, System.Drawing.FontStyle.Bold);
+            btnPlayStop.Font = new System.Drawing.Font("Segoe UI", 12F, System.Drawing.FontStyle.Bold);
             btnPlayStop.Text = "▶ Start";
             btnPlayStop.BackColor = System.Drawing.Color.LightGreen;
             btnPlayStop.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
@@ -122,7 +122,7 @@ namespace ScreamReader
             // Configuration Group
             grpConfig = new System.Windows.Forms.GroupBox();
             grpConfig.Text = "⚙ Configuration";
-            grpConfig.Font = new System.Drawing.Font("Segoe UI", 10F, System.Drawing.FontStyle.Bold);
+            grpConfig.Font = new System.Drawing.Font("Segoe UI", 9F, System.Drawing.FontStyle.Bold);
 
             lblIpAddress = new System.Windows.Forms.Label { Text = "Adresse IP:", AutoSize = true };
             txtIpAddress = new System.Windows.Forms.TextBox { Width = 150 };
@@ -169,7 +169,7 @@ namespace ScreamReader
             numChannels.Width = 60;
             numChannels.ValueChanged += OnConfigChanged;
 
-            chkAutoBuffer = new System.Windows.Forms.CheckBox { Text = "Buffer Auto", AutoSize = true };
+            chkAutoBuffer = new System.Windows.Forms.CheckBox { Text = "Buffer Auto", AutoSize = true, Checked = true };
             chkAutoBuffer.CheckedChanged += chkAutoBuffer_CheckedChanged;
             numBufferDuration = new System.Windows.Forms.NumericUpDown();
             numBufferDuration.Minimum = 1;
@@ -177,7 +177,7 @@ namespace ScreamReader
             numBufferDuration.Width = 60;
             numBufferDuration.ValueChanged += OnConfigChanged;
 
-            chkAutoWasapi = new System.Windows.Forms.CheckBox { Text = "WASAPI Auto", AutoSize = true };
+            chkAutoWasapi = new System.Windows.Forms.CheckBox { Text = "WASAPI Auto", AutoSize = true, Checked = true };
             chkAutoWasapi.CheckedChanged += chkAutoWasapi_CheckedChanged;
             numWasapiLatency = new System.Windows.Forms.NumericUpDown();
             numWasapiLatency.Minimum = 1;
@@ -202,7 +202,7 @@ namespace ScreamReader
             // Stats Group
             grpStats = new System.Windows.Forms.GroupBox();
             grpStats.Text = "📊 Statistiques en temps réel";
-            grpStats.Font = new System.Drawing.Font("Segoe UI", 10F, System.Drawing.FontStyle.Bold);
+            grpStats.Font = new System.Drawing.Font("Segoe UI", 9F, System.Drawing.FontStyle.Bold);
 
             lblConnectionStatusLabel = new System.Windows.Forms.Label { Text = "État:", AutoSize = true };
             lblConnectionStatus = new System.Windows.Forms.Label { Text = "✗ Déconnecté", AutoSize = true, ForeColor = System.Drawing.Color.Gray };
@@ -245,7 +245,7 @@ namespace ScreamReader
             // Logs
             grpLogs = new System.Windows.Forms.GroupBox();
             grpLogs.Text = "📋 Journaux";
-            grpLogs.Font = new System.Drawing.Font("Segoe UI", 10F, System.Drawing.FontStyle.Bold);
+            grpLogs.Font = new System.Drawing.Font("Segoe UI", 9F, System.Drawing.FontStyle.Bold);
 
             txtLogs = new System.Windows.Forms.RichTextBox();
             txtLogs.ReadOnly = true;

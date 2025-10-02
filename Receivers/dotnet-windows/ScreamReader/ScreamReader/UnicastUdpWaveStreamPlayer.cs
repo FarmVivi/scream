@@ -35,7 +35,7 @@ namespace ScreamReader
         /// <summary>
         /// Initialize the client with audio optimization parameters.
         /// </summary>
-        public UnicastUdpWaveStreamPlayer(int bitWidth, int rate, int channels, int unicastPort, IPAddress localAddress, int bufferDuration, int wasapiLatency, bool useExclusiveMode) : base(bitWidth, rate, channels, bufferDuration, wasapiLatency, useExclusiveMode)
+        public UnicastUdpWaveStreamPlayer(int bitWidth, int rate, int channels, int unicastPort, IPAddress localAddress, int bufferDuration, int wasapiLatency, bool useExclusiveMode, bool isAutoDetectFormat = true) : base(bitWidth, rate, channels, bufferDuration, wasapiLatency, useExclusiveMode, isAutoDetectFormat)
         {
             this.unicastPort = unicastPort;
             this.localAddress = localAddress ?? IPAddress.Any; // Default to any local address

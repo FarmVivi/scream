@@ -6,6 +6,17 @@ using System.Net;
 namespace ScreamReader
 {
     /// <summary>
+    /// Buffer health status for UI display
+    /// </summary>
+    public enum BufferHealth
+    {
+        Critical,   // < 15%
+        Low,        // 15-25%
+        Optimal,    // 25-80%
+        High        // > 80%
+    }
+
+    /// <summary>
     /// Modern main window for ScreamReader with real-time stats and controls
     /// </summary>
     public partial class AudioReceiverWindow : Form
@@ -31,6 +42,7 @@ namespace ScreamReader
             
             // Appliquer la configuration
             currentConfig = ConfigurationManager.GetStreamConfiguration();
+            LogManager.LogDebug($"[AudioReceiverWindow] Config après GetStreamConfiguration: {currentConfig}");
             UpdateConfigUI();
             UpdatePlayButton();
             
@@ -99,6 +111,14 @@ namespace ScreamReader
             
             // Actual cleanup
             StopAudio();
+            
+            // Nettoyer le player à la fermeture de l'application
+            if (audioPlayer != null)
+            {
+                audioPlayer.Dispose();
+                audioPlayer = null;
+            }
+            
             statsUpdateTimer?.Stop();
             statsUpdateTimer?.Dispose();
             LogManager.LogAdded -= OnLogAdded;
@@ -207,18 +227,24 @@ namespace ScreamReader
                 lblTotalLatency.Text = $"{stats.TotalLatencyMs:F1} ms";
 
                 // Network buffer
-                UpdateBufferBar(progressNetworkBuffer, stats.NetworkBuffer);
-                lblNetworkBuffer.Text = $"{stats.NetworkBuffer.CurrentMs:F1}ms / {stats.NetworkBuffer.CapacityMs:F0}ms";
-                lblNetworkBufferPercent.Text = $"{stats.NetworkBuffer.FillPercentage:F0}%";
-                lblNetworkBufferStatus.Text = stats.NetworkBuffer.HealthDescription;
-                lblNetworkBufferStatus.ForeColor = GetHealthColor(stats.NetworkBuffer.Health);
+                lblNetworkBuffer.Text = $"{stats.NetworkBufferedMs:F1}ms / {stats.NetworkBufferCapacityMs:F0}ms";
+                lblNetworkBufferPercent.Text = $"{stats.NetworkBufferFillPercentage:F0}%";
+                progressNetworkBuffer.Value = Math.Min(100, Math.Max(0, (int)stats.NetworkBufferFillPercentage));
+                
+                var networkHealth = GetBufferHealth(stats.NetworkBufferFillPercentage);
+                lblNetworkBufferStatus.Text = GetHealthDescription(networkHealth);
+                lblNetworkBufferStatus.ForeColor = GetHealthColor(networkHealth);
+                progressNetworkBuffer.ForeColor = GetHealthColor(networkHealth);
 
                 // WASAPI buffer
-                UpdateBufferBar(progressWasapiBuffer, stats.WasapiBuffer);
-                lblWasapiBuffer.Text = $"{stats.WasapiBuffer.CurrentMs:F1}ms / {stats.WasapiBuffer.CapacityMs:F0}ms";
-                lblWasapiBufferPercent.Text = $"{stats.WasapiBuffer.FillPercentage:F0}%";
-                lblWasapiBufferStatus.Text = stats.WasapiBuffer.HealthDescription;
-                lblWasapiBufferStatus.ForeColor = GetHealthColor(stats.WasapiBuffer.Health);
+                lblWasapiBuffer.Text = $"{stats.WasapiBufferedMs:F1}ms / {stats.WasapiBufferCapacityMs:F0}ms";
+                lblWasapiBufferPercent.Text = $"{stats.WasapiBufferFillPercentage:F0}%";
+                progressWasapiBuffer.Value = Math.Min(100, Math.Max(0, (int)stats.WasapiBufferFillPercentage));
+                
+                var wasapiHealth = GetBufferHealth(stats.WasapiBufferFillPercentage);
+                lblWasapiBufferStatus.Text = GetHealthDescription(wasapiHealth);
+                lblWasapiBufferStatus.ForeColor = GetHealthColor(wasapiHealth);
+                progressWasapiBuffer.ForeColor = GetHealthColor(wasapiHealth);
 
                 // Performance
                 lblUnderruns.Text = stats.UnderrunCount.ToString();
@@ -229,10 +255,24 @@ namespace ScreamReader
             }
         }
 
-        private void UpdateBufferBar(ProgressBar progressBar, BufferStats buffer)
+        private BufferHealth GetBufferHealth(double fillPercentage)
         {
-            progressBar.Value = Math.Min(100, Math.Max(0, (int)buffer.FillPercentage));
-            progressBar.ForeColor = GetHealthColor(buffer.Health);
+            if (fillPercentage < 15) return BufferHealth.Critical;
+            if (fillPercentage < 25) return BufferHealth.Low;
+            if (fillPercentage > 80) return BufferHealth.High;
+            return BufferHealth.Optimal;
+        }
+
+        private string GetHealthDescription(BufferHealth health)
+        {
+            switch (health)
+            {
+                case BufferHealth.Critical: return "CRITIQUE";
+                case BufferHealth.Low: return "Bas";
+                case BufferHealth.Optimal: return "Optimal";
+                case BufferHealth.High: return "Élevé";
+                default: return "Inconnu";
+            }
         }
 
         private Color GetHealthColor(BufferHealth health)
@@ -263,6 +303,9 @@ namespace ScreamReader
         {
             try
             {
+                // Lire la configuration depuis l'UI
+                ReadConfigFromUI();
+                
                 // Validate configuration
                 if (!currentConfig.IsValid(out string error))
                 {
@@ -273,32 +316,47 @@ namespace ScreamReader
 
                 LogManager.Log($"Démarrage du flux audio: {currentConfig}");
 
-                // Create player based on configuration
-                if (currentConfig.IsMulticast)
+                // Ne recréer le player que si nécessaire (première fois ou changement de mode multicast/unicast)
+                bool needNewPlayer = audioPlayer == null || 
+                    (currentConfig.IsMulticast && !(audioPlayer is MulticastUdpWaveStreamPlayer)) ||
+                    (!currentConfig.IsMulticast && !(audioPlayer is UnicastUdpWaveStreamPlayer));
+
+                if (needNewPlayer)
                 {
-                    audioPlayer = new MulticastUdpWaveStreamPlayer(
-                        currentConfig.BitWidth,
-                        currentConfig.SampleRate,
-                        currentConfig.Channels,
-                        currentConfig.Port,
-                        currentConfig.IpAddress,
-                        currentConfig.BufferDuration,
-                        currentConfig.WasapiLatency,
-                        currentConfig.UseExclusiveMode
-                    );
+                    // Create player based on configuration
+                    if (currentConfig.IsMulticast)
+                    {
+                        audioPlayer = new MulticastUdpWaveStreamPlayer(
+                            currentConfig.BitWidth,
+                            currentConfig.SampleRate,
+                            currentConfig.Channels,
+                            currentConfig.Port,
+                            currentConfig.IpAddress,
+                            currentConfig.IsAutoBuffer ? -1 : currentConfig.BufferDuration,
+                            currentConfig.IsAutoWasapi ? -1 : currentConfig.WasapiLatency,
+                            currentConfig.UseExclusiveMode,
+                            currentConfig.IsAutoDetectFormat
+                        );
+                    }
+                    else
+                    {
+                        audioPlayer = new UnicastUdpWaveStreamPlayer(
+                            currentConfig.BitWidth,
+                            currentConfig.SampleRate,
+                            currentConfig.Channels,
+                            currentConfig.Port,
+                            currentConfig.IpAddress,
+                            currentConfig.IsAutoBuffer ? -1 : currentConfig.BufferDuration,
+                            currentConfig.IsAutoWasapi ? -1 : currentConfig.WasapiLatency,
+                            currentConfig.UseExclusiveMode,
+                            currentConfig.IsAutoDetectFormat
+                        );
+                    }
+                    LogManager.LogDebug($"[AudioReceiverWindow] Nouveau player créé ({(currentConfig.IsMulticast ? "Multicast" : "Unicast")})");
                 }
                 else
                 {
-                    audioPlayer = new UnicastUdpWaveStreamPlayer(
-                        currentConfig.BitWidth,
-                        currentConfig.SampleRate,
-                        currentConfig.Channels,
-                        currentConfig.Port,
-                        currentConfig.IpAddress,
-                        currentConfig.BufferDuration,
-                        currentConfig.WasapiLatency,
-                        currentConfig.UseExclusiveMode
-                    );
+                    LogManager.LogDebug("[AudioReceiverWindow] Réutilisation du player existant (adaptations préservées)");
                 }
 
                 // Set volume
@@ -327,15 +385,16 @@ namespace ScreamReader
                 {
                     LogManager.Log("Arrêt du flux audio...");
                     audioPlayer.Stop();
-                    audioPlayer.Dispose();
-                    audioPlayer = null;
+                    // NE PAS détruire le player pour préserver le bufferManager adaptatif
+                    // audioPlayer.Dispose();
+                    // audioPlayer = null;
                 }
 
                 isPlaying = false;
                 UpdatePlayButton();
                 ClearStats();
 
-                LogManager.LogInfo("✓ Lecture audio arrêtée");
+                LogManager.LogInfo("✓ Lecture audio arrêtée (player préservé pour adaptations)");
             }
             catch (Exception ex)
             {
@@ -380,46 +439,71 @@ namespace ScreamReader
             progressWasapiBuffer.Value = 0;
         }
 
+        private bool isUpdatingUI = false; // Flag pour éviter les événements circulaires
+
         private void UpdateConfigUI()
         {
-            txtIpAddress.Text = currentConfig.IpAddress.ToString();
-            numPort.Value = currentConfig.Port;
-            radioMulticast.Checked = currentConfig.IsMulticast;
-            radioUnicast.Checked = !currentConfig.IsMulticast;
-            numBitWidth.Value = currentConfig.BitWidth;
-            numSampleRate.Value = currentConfig.SampleRate;
-            numChannels.Value = currentConfig.Channels;
+            // Désactiver les événements pendant la mise à jour
+            isUpdatingUI = true;
             
-            if (currentConfig.BufferDuration == -1)
+            try
             {
-                chkAutoBuffer.Checked = true;
-                numBufferDuration.Enabled = false;
-                numBufferDuration.Value = 30;
-            }
-            else
-            {
-                chkAutoBuffer.Checked = false;
-                numBufferDuration.Enabled = true;
-                numBufferDuration.Value = currentConfig.BufferDuration;
-            }
+                txtIpAddress.Text = currentConfig.IpAddress.ToString();
+                numPort.Value = currentConfig.Port;
+                radioMulticast.Checked = currentConfig.IsMulticast;
+                radioUnicast.Checked = !currentConfig.IsMulticast;
+                
+                // Gérer les valeurs -1 (auto-detect) pour les contrôles de format
+                numBitWidth.Value = currentConfig.BitWidth > 0 ? currentConfig.BitWidth : 16;
+                numSampleRate.Value = currentConfig.SampleRate > 0 ? currentConfig.SampleRate : 48000;
+                numChannels.Value = currentConfig.Channels > 0 ? currentConfig.Channels : 2;
+                
+                // Auto-detection format
+                chkAutoDetectFormat.Checked = currentConfig.IsAutoDetectFormat;
+                isAutoDetectFormat = currentConfig.IsAutoDetectFormat;
+                UpdateFormatControlsState();
+                
+                // Auto buffer
+                if (currentConfig.BufferDuration == -1 || currentConfig.IsAutoBuffer)
+                {
+                    chkAutoBuffer.Checked = true;
+                    numBufferDuration.Enabled = false;
+                    numBufferDuration.Value = 30;
+                }
+                else
+                {
+                    chkAutoBuffer.Checked = false;
+                    numBufferDuration.Enabled = true;
+                    numBufferDuration.Value = currentConfig.BufferDuration;
+                }
 
-            if (currentConfig.WasapiLatency == -1)
-            {
-                chkAutoWasapi.Checked = true;
-                numWasapiLatency.Enabled = false;
-                numWasapiLatency.Value = 20;
-            }
-            else
-            {
-                chkAutoWasapi.Checked = false;
-                numWasapiLatency.Enabled = true;
-                numWasapiLatency.Value = currentConfig.WasapiLatency;
-            }
+                // Auto WASAPI
+                if (currentConfig.WasapiLatency == -1 || currentConfig.IsAutoWasapi)
+                {
+                    chkAutoWasapi.Checked = true;
+                    numWasapiLatency.Enabled = false;
+                    numWasapiLatency.Value = 20;
+                }
+                else
+                {
+                    chkAutoWasapi.Checked = false;
+                    numWasapiLatency.Enabled = true;
+                    numWasapiLatency.Value = currentConfig.WasapiLatency;
+                }
 
-            chkExclusiveMode.Checked = currentConfig.UseExclusiveMode;
+                chkExclusiveMode.Checked = currentConfig.UseExclusiveMode;
+            }
+            finally
+            {
+                // Réactiver les événements
+                isUpdatingUI = false;
+            }
         }
 
-        private void SaveConfigFromUI()
+        /// <summary>
+        /// Lit la configuration depuis l'UI pour la mettre à jour dans currentConfig
+        /// </summary>
+        private void ReadConfigFromUI()
         {
             try
             {
@@ -429,9 +513,24 @@ namespace ScreamReader
                 currentConfig.BitWidth = (int)numBitWidth.Value;
                 currentConfig.SampleRate = (int)numSampleRate.Value;
                 currentConfig.Channels = (int)numChannels.Value;
+                currentConfig.IsAutoDetectFormat = chkAutoDetectFormat.Checked;
+                currentConfig.IsAutoBuffer = chkAutoBuffer.Checked;
+                currentConfig.IsAutoWasapi = chkAutoWasapi.Checked;
                 currentConfig.BufferDuration = chkAutoBuffer.Checked ? -1 : (int)numBufferDuration.Value;
                 currentConfig.WasapiLatency = chkAutoWasapi.Checked ? -1 : (int)numWasapiLatency.Value;
                 currentConfig.UseExclusiveMode = chkExclusiveMode.Checked;
+            }
+            catch (Exception ex)
+            {
+                LogManager.LogError($"[AudioReceiverWindow] Erreur lecture config UI: {ex.Message}");
+            }
+        }
+
+        private void SaveConfigFromUI()
+        {
+            try
+            {
+                ReadConfigFromUI();
                 
                 // Sauvegarder dans le registre
                 ConfigurationManager.UpdateFromStreamConfiguration(currentConfig);
@@ -446,6 +545,9 @@ namespace ScreamReader
         // Configuration change handlers
         private void OnConfigChanged(object sender, EventArgs e)
         {
+            // Ignorer si on est en train de mettre à jour l'UI
+            if (isUpdatingUI) return;
+            
             if (!isPlaying)
             {
                 SaveConfigFromUI();
@@ -454,6 +556,8 @@ namespace ScreamReader
 
         private void chkAutoBuffer_CheckedChanged(object sender, EventArgs e)
         {
+            if (isUpdatingUI) return;
+            
             numBufferDuration.Enabled = !chkAutoBuffer.Checked;
             if (chkAutoBuffer.Checked)
             {
@@ -464,6 +568,8 @@ namespace ScreamReader
 
         private void chkAutoWasapi_CheckedChanged(object sender, EventArgs e)
         {
+            if (isUpdatingUI) return;
+            
             numWasapiLatency.Enabled = !chkAutoWasapi.Checked;
             if (chkAutoWasapi.Checked)
             {
@@ -474,6 +580,8 @@ namespace ScreamReader
 
         private void chkAutoDetectFormat_CheckedChanged(object sender, EventArgs e)
         {
+            if (isUpdatingUI) return;
+            
             isAutoDetectFormat = chkAutoDetectFormat.Checked;
             UpdateFormatControlsState();
             
@@ -488,8 +596,10 @@ namespace ScreamReader
                 LogManager.LogInfo("Configuration manuelle du format");
                 lblDetectedFormat.Text = "Mode manuel";
                 lblDetectedFormat.ForeColor = System.Drawing.Color.DarkOrange;
-                SaveConfigFromUI();
             }
+            
+            // Sauvegarder dans tous les cas
+            SaveConfigFromUI();
         }
         
         private void UpdateFormatControlsState()

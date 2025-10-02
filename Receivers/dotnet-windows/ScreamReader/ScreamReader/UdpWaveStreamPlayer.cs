@@ -31,11 +31,12 @@ namespace ScreamReader
         protected int BitWidth { get; set; }
         protected int SampleRate { get; set; }
         protected int ChannelCount { get; set; }
+        protected bool IsAutoDetectFormat { get; set; } = true; // true = auto-detect format from stream
         protected int BufferDuration { get; set; } = -1; // -1 means auto-detect
         protected int WasapiLatency { get; set; } = -1; // -1 means auto-detect
         protected bool UseExclusiveMode { get; set; } = false;
 
-        // Adaptive buffer management
+        // Adaptive buffer management (persistant entre les sessions)
         private AdaptiveBufferManager bufferManager;
         
         // Statistics tracking
@@ -146,7 +147,7 @@ namespace ScreamReader
         /// <summary>
         /// Constructor with audio optimization parameters.
         /// </summary>
-        public UdpWaveStreamPlayer(int bitWidth, int rate, int channels, int bufferDuration, int wasapiLatency, bool useExclusiveMode)
+        public UdpWaveStreamPlayer(int bitWidth, int rate, int channels, int bufferDuration, int wasapiLatency, bool useExclusiveMode, bool isAutoDetectFormat = true)
             : this()
         {
             this.BitWidth = bitWidth;
@@ -155,6 +156,7 @@ namespace ScreamReader
             this.BufferDuration = bufferDuration;
             this.WasapiLatency = wasapiLatency;
             this.UseExclusiveMode = useExclusiveMode;
+            this.IsAutoDetectFormat = isAutoDetectFormat;
         }
         #endregion
 
@@ -176,17 +178,24 @@ namespace ScreamReader
             // Create a new token for this run
             this.cancellationTokenSource = new CancellationTokenSource();
 
-            // Initialize adaptive buffer manager
-            this.bufferManager = new AdaptiveBufferManager(
-                this.BufferDuration, 
-                this.WasapiLatency, 
-                this.UseExclusiveMode,
-                this.BitWidth,
-                this.SampleRate
-            );
-            
-            // Appliquer les recommandations WASAPI de la session précédente
-            this.bufferManager.ApplyRecommendedWasapiLatency();
+            // Initialize adaptive buffer manager (une seule fois, puis réutiliser)
+            if (this.bufferManager == null)
+            {
+                this.bufferManager = new AdaptiveBufferManager(
+                    this.BufferDuration, 
+                    this.WasapiLatency, 
+                    this.UseExclusiveMode,
+                    this.BitWidth,
+                    this.SampleRate
+                );
+                LogManager.Log("[UdpWaveStreamPlayer] AdaptiveBufferManager créé");
+            }
+            else
+            {
+                // Appliquer les recommandations de la session précédente
+                this.bufferManager.ApplyRecommendedWasapiLatency();
+                LogManager.Log($"[UdpWaveStreamPlayer] AdaptiveBufferManager réutilisé - Buffer cible: {bufferManager.CurrentBufferDurationMs}ms, WASAPI: {bufferManager.CurrentWasapiLatencyMs}ms");
+            }
 
             // Run in background with high priority
             Task.Run(() =>
@@ -195,6 +204,18 @@ namespace ScreamReader
                 {
                     // Set thread priority to high for better audio performance
                     System.Threading.Thread.CurrentThread.Priority = System.Threading.ThreadPriority.AboveNormal;
+                    
+                    // Recréer le UDP client si nécessaire (après Stop())
+                    if (this.udpClient == null)
+                    {
+                        this.udpClient = new UdpClient
+                        {
+                            ExclusiveAddressUse = false
+                        };
+                        this.udpClient.Client.ReceiveTimeout = 10000;
+                        LogManager.LogDebug("[UdpWaveStreamPlayer] UDP client recréé après Stop()");
+                    }
+                    
                     IPEndPoint localEp = null;
                     LogManager.Log("[UdpWaveStreamPlayer] Configuring UDP client...");
                     ConfigureUdpClient(this.udpClient, localEp);
@@ -210,15 +231,28 @@ namespace ScreamReader
                     byte currentChannelsMapMsb = 0x00;
 
                     var bufferDuration = TimeSpan.FromMilliseconds(bufferManager.CurrentBufferDurationMs);
-                    var rsws = new BufferedWaveProvider(
-                        new WaveFormat(this.SampleRate, this.BitWidth, this.ChannelCount))
+                    BufferedWaveProvider rsws = null;
+                    bool outputInitialized = false;
+                    int packetsBeforeInit = this.IsAutoDetectFormat ? 3 : 0;  // Attendre 3 paquets pour détecter le format en mode auto, 0 en mode manuel
+                    
+                    if (this.IsAutoDetectFormat)
                     {
-                        BufferDuration = bufferDuration,
-                        DiscardOnBufferOverflow = true
-                    };
-                    LogManager.Log($"[UdpWaveStreamPlayer] Created BufferedWaveProvider with {bufferDuration.TotalMilliseconds}ms buffer");
-
-                    InitializeOutputDevice(rsws);
+                        LogManager.Log($"[UdpWaveStreamPlayer] Mode auto-détection: Waiting for {packetsBeforeInit} packets to detect format...");
+                    }
+                    else
+                    {
+                        LogManager.Log($"[UdpWaveStreamPlayer] Mode manuel: Using format {this.SampleRate}Hz, {this.BitWidth}bit, {this.ChannelCount}ch");
+                        // Créer immédiatement le buffer avec le format spécifié
+                        rsws = new BufferedWaveProvider(new WaveFormat(this.SampleRate, this.BitWidth, this.ChannelCount))
+                        {
+                            BufferDuration = bufferDuration,
+                            DiscardOnBufferOverflow = true
+                        };
+                        
+                        // NE PAS initialiser WASAPI maintenant - attendre d'avoir des données dans le buffer
+                        // WASAPI sera initialisé au premier paquet (packetsBeforeInit = 0)
+                        LogManager.Log($"[UdpWaveStreamPlayer] Buffer created with manual format, WASAPI will start on first packet");
+                    }
 
                     LogManager.Log("[UdpWaveStreamPlayer] Starting UDP receive loop...");
                     LogManager.Log("[UdpWaveStreamPlayer] Waiting for audio data...");
@@ -246,6 +280,17 @@ namespace ScreamReader
                         {
                             byte[] data = this.udpClient.Receive(ref localEp);
                             localPacketCount++;
+                            
+                            // Mettre à jour le statut de connexion au premier paquet
+                            if (localPacketCount == 1)
+                            {
+                                lock (statsLock)
+                                {
+                                    currentStats.IsConnected = true;
+                                    currentStats.RemoteEndpoint = localEp.ToString();
+                                }
+                                LogManager.Log($"[UdpWaveStreamPlayer] Connected to {localEp}");
+                            }
                             
                             // Update stats
                             lock (statsLock)
@@ -316,19 +361,37 @@ namespace ScreamReader
                                 int newRate = ((currentRate >= 128) ? 44100 : 48000)
                                               * (currentRate % 128);
 
-                                LogManager.Log($"[UdpWaveStreamPlayer] Format change detected: {newRate}Hz, {currentWidth}bit, {currentChannels}ch");
-
-                                // Stop old output before re-initializing
-                                this.output?.Stop();
-
-                                // Recreate buffer manager with new format
-                                this.bufferManager = new AdaptiveBufferManager(
-                                    this.BufferDuration, 
-                                    this.WasapiLatency, 
-                                    this.UseExclusiveMode,
-                                    currentWidth,
-                                    newRate
-                                );
+                                bool isFirstInit = !outputInitialized;
+                                if (isFirstInit)
+                                {
+                                    LogManager.Log($"[UdpWaveStreamPlayer] Format detected: {newRate}Hz, {currentWidth}bit, {currentChannels}ch");
+                                    
+                                    // Première détection : ne PAS recréer le bufferManager !
+                                    // Il existe déjà avec les bonnes valeurs adaptées (si restart)
+                                    // On se contente de récupérer sa capacité actuelle pour le nouveau buffer
+                                    LogManager.LogDebug($"[UdpWaveStreamPlayer] Conservation du BufferManager existant (adaptations préservées)");
+                                }
+                                else
+                                {
+                                    LogManager.Log($"[UdpWaveStreamPlayer] Format change detected: {newRate}Hz, {currentWidth}bit, {currentChannels}ch");
+                                    // Stop old output before re-initializing
+                                    this.output?.Stop();
+                                    
+                                    // Changement de format réel : recréer le bufferManager
+                                    // MAIS utiliser les valeurs adaptées au lieu des valeurs initiales
+                                    int adaptedBufferDuration = (int)this.bufferManager.CurrentBufferDurationMs;
+                                    int adaptedWasapiLatency = (int)this.bufferManager.CurrentWasapiLatencyMs;
+                                    
+                                    this.bufferManager = new AdaptiveBufferManager(
+                                        adaptedBufferDuration,  // Utiliser valeur adaptée au lieu de this.BufferDuration
+                                        adaptedWasapiLatency,   // Utiliser valeur adaptée au lieu de this.WasapiLatency
+                                        this.UseExclusiveMode,
+                                        currentWidth,
+                                        newRate
+                                    );
+                                    
+                                    LogManager.LogDebug($"[UdpWaveStreamPlayer] BufferManager recréé avec valeurs adaptées: Buffer={adaptedBufferDuration}ms, WASAPI={adaptedWasapiLatency}ms");
+                                }
 
                                 bufferDuration = TimeSpan.FromMilliseconds(bufferManager.CurrentBufferDurationMs);
                                 rsws = new BufferedWaveProvider(new WaveFormat(newRate, currentWidth, currentChannels))
@@ -337,41 +400,78 @@ namespace ScreamReader
                                     DiscardOnBufferOverflow = true
                                 };
 
+                                // Mettre à jour les stats avec le format détecté
+                                lock (statsLock)
+                                {
+                                    currentStats.SampleRate = newRate;
+                                    currentStats.BitDepth = currentWidth;
+                                    currentStats.Channels = currentChannels;
+                                }
+                                
+                                // Initialiser WASAPI seulement après avoir attendu quelques paquets
+                                if (!outputInitialized && localPacketCount >= packetsBeforeInit)
+                                {
+                                    InitializeOutputDevice(rsws);
+                                    outputInitialized = true;
+                                    LogManager.Log($"[UdpWaveStreamPlayer] WASAPI initialized and playing with detected format");
+                                }
+                                else if (outputInitialized)
+                                {
+                                    // Le format a changé, réinitialiser WASAPI avec le nouveau buffer
+                                    InitializeOutputDevice(rsws);
+                                    // InitializeOutputDevice() appelle déjà Play(), pas besoin de le rappeler
+                                }
+                            }
+                            
+                            // Si WASAPI n'est pas encore initialisé (mode manuel avec format correspondant),
+                            // l'initialiser maintenant qu'on a reçu assez de paquets
+                            if (!outputInitialized && rsws != null && localPacketCount >= packetsBeforeInit)
+                            {
                                 InitializeOutputDevice(rsws);
+                                outputInitialized = true;
+                                LogManager.Log($"[UdpWaveStreamPlayer] WASAPI initialized (mode manuel, format matching)");
                             }
 
-                            // Add samples (starting after the 5-byte header)
-                            rsws.AddSamples(data, 5, data.Length - 5);
-                            
-                            // Monitor buffer status and adapt every 25 packets (plus léger)
-                            if (localPacketCount % 25 == 0)
+                            // Audio data starts at byte 5
+                            int audioDataSize = data.Length - 5;
+                            if (audioDataSize <= 0)
+                                continue;
+
+                            // Add the audio data to the buffer as soon as rsws is created
+                            // (even if WASAPI is not yet initialized, samples will be buffered)
+                            if (rsws != null)
                             {
+                                rsws.AddSamples(data, 5, audioDataSize);
+                            
+                                // Mettre à jour les stats du buffer à CHAQUE paquet pour un affichage fluide dans l'UI
                                 var bufferedMs = rsws.BufferedDuration.TotalMilliseconds;
                                 var bufferCapacityMs = rsws.BufferDuration.TotalMilliseconds;
                                 
-                                // Enregistrer la mesure pour l'adaptation
-                                bufferManager.RecordMeasurement(bufferedMs, (int)bufferCapacityMs, localPacketCount);
-                                
-                                // Update buffer stats
+                                // Mettre à jour les stats directement depuis AdaptiveBufferManager
                                 lock (statsLock)
                                 {
-                                    currentStats.NetworkBuffer.UpdateMeasurement(bufferedMs, bufferCapacityMs);
-                                    currentStats.WasapiBuffer.UpdateMeasurement(
-                                        bufferManager.ActualWasapiLatencyMs,
-                                        bufferManager.ActualWasapiLatencyMs
-                                    );
+                                    currentStats.NetworkBufferedMs = bufferManager.NetworkBufferedMs;
+                                    currentStats.NetworkBufferCapacityMs = bufferManager.NetworkBufferCapacityMs;
+                                    currentStats.WasapiBufferedMs = bufferManager.WasapiBufferedMs;
+                                    currentStats.WasapiBufferCapacityMs = bufferManager.WasapiBufferCapacityMs;
                                 }
                                 
-                                // Note: Le buffer réseau (BufferedWaveProvider) ne peut pas être ajusté dynamiquement
-                                // Les ajustements prendront effet lors du prochain changement de format audio
-                                // WASAPI ne peut également pas être changé sans recréer WasapiOut
-                            }
+                                // Enregistrer la mesure pour l'adaptation tous les 25 paquets (moins intensif)
+                                if (localPacketCount % 25 == 0)
+                                {
+                                    bufferManager.RecordMeasurement(bufferedMs, (int)bufferCapacityMs, localPacketCount);
+                                    
+                                    // Note: Le buffer réseau (BufferedWaveProvider) ne peut pas être ajusté dynamiquement
+                                    // Les ajustements prendront effet lors du prochain changement de format audio
+                                    // WASAPI ne peut également pas être changé sans recréer WasapiOut
+                                }
                             
-                            // Log statistiques périodiques en debug (stats déjà dans l'UI)
-                            if ((DateTime.Now - lastStatsLogTime).TotalSeconds >= 10)
-                            {
-                                LogManager.LogDebug($"[UdpWaveStreamPlayer] Stats: {bufferManager.GetStatistics()}");
-                                lastStatsLogTime = DateTime.Now;
+                                // Log statistiques périodiques en debug (stats déjà dans l'UI)
+                                if ((DateTime.Now - lastStatsLogTime).TotalSeconds >= 10)
+                                {
+                                    LogManager.LogDebug($"[UdpWaveStreamPlayer] Stats: {bufferManager.GetStatistics()}");
+                                    lastStatsLogTime = DateTime.Now;
+                                }
                             }
                         }
                         catch (SocketException ex)
@@ -421,6 +521,28 @@ namespace ScreamReader
             
             this.cancellationTokenSource?.Cancel();
             this.shutdownLock.Release();
+            
+            // Fermer le socket UDP pour libérer le port (mais garder bufferManager)
+            try
+            {
+                this.udpClient?.Close();
+                this.udpClient?.Dispose();
+                this.udpClient = null;
+            }
+            catch (Exception ex)
+            {
+                LogManager.LogDebug($"[UdpWaveStreamPlayer] Erreur fermeture socket: {ex.Message}");
+            }
+            
+            // Arrêter la lecture audio (mais garder output pour réutilisation)
+            try
+            {
+                this.output?.Stop();
+            }
+            catch (Exception ex)
+            {
+                LogManager.LogDebug($"[UdpWaveStreamPlayer] Erreur arrêt output: {ex.Message}");
+            }
         }
 
         #region IMMNotificationClient Implementation

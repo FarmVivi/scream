@@ -18,6 +18,11 @@ namespace ScreamReader
         public int SampleRate { get; set; }
         public int Channels { get; set; }
 
+        // Auto-detection flags
+        public bool IsAutoDetectFormat { get; set; } = true;   // true = auto-detect format from stream
+        public bool IsAutoBuffer { get; set; } = true;         // true = adaptive buffer management
+        public bool IsAutoWasapi { get; set; } = true;         // true = adaptive WASAPI latency
+
         // Buffer settings
         public int BufferDuration { get; set; } = -1;  // -1 = auto
         public int WasapiLatency { get; set; } = -1;   // -1 = auto
@@ -36,6 +41,9 @@ namespace ScreamReader
                 BitWidth = 16,
                 SampleRate = 44100,
                 Channels = 2,
+                IsAutoDetectFormat = true,
+                IsAutoBuffer = true,
+                IsAutoWasapi = true,
                 BufferDuration = -1,
                 WasapiLatency = -1,
                 UseExclusiveMode = false
@@ -55,6 +63,9 @@ namespace ScreamReader
                 BitWidth = this.BitWidth,
                 SampleRate = this.SampleRate,
                 Channels = this.Channels,
+                IsAutoDetectFormat = this.IsAutoDetectFormat,
+                IsAutoBuffer = this.IsAutoBuffer,
+                IsAutoWasapi = this.IsAutoWasapi,
                 BufferDuration = this.BufferDuration,
                 WasapiLatency = this.WasapiLatency,
                 UseExclusiveMode = this.UseExclusiveMode

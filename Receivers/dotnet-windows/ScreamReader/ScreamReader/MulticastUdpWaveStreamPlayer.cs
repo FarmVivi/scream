@@ -35,7 +35,7 @@ namespace ScreamReader
         /// <summary>
         /// Initialize the client with audio optimization parameters.
         /// </summary>
-        public MulticastUdpWaveStreamPlayer(int bitWidth, int rate, int channels, int multicastPort, IPAddress multicastAddress, int bufferDuration, int wasapiLatency, bool useExclusiveMode) : base(bitWidth, rate, channels, bufferDuration, wasapiLatency, useExclusiveMode)
+        public MulticastUdpWaveStreamPlayer(int bitWidth, int rate, int channels, int multicastPort, IPAddress multicastAddress, int bufferDuration, int wasapiLatency, bool useExclusiveMode, bool isAutoDetectFormat = true) : base(bitWidth, rate, channels, bufferDuration, wasapiLatency, useExclusiveMode, isAutoDetectFormat)
         {
             this.multicastPort = multicastPort;
             this.multicastAddress = multicastAddress;

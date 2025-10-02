@@ -25,6 +25,11 @@ namespace ScreamReader
         public static int SampleRate { get; set; } = -1;
         public static int Channels { get; set; } = -1;
         
+        // Auto-Detection Flags
+        public static bool IsAutoDetectFormat { get; set; } = true;  // true = auto-detect format from stream
+        public static bool IsAutoBuffer { get; set; } = true;        // true = adaptive buffer management
+        public static bool IsAutoWasapi { get; set; } = true;        // true = adaptive WASAPI latency
+        
         // Buffer Settings (-1 = auto-adapt)
         public static int BufferDuration { get; set; } = -1;
         public static int WasapiLatency { get; set; } = -1;
@@ -61,10 +66,17 @@ namespace ScreamReader
                     Port = (int)key.GetValue("Port", Port);
                     IsMulticast = Convert.ToBoolean(key.GetValue("IsMulticast", IsMulticast));
                     
+                    LogManager.LogDebug($"[Config] Chargé depuis registre: IP={IpAddress}, Port={Port}, Multicast={IsMulticast}");
+                    
                     // Audio Format Settings
                     BitWidth = (int)key.GetValue("BitWidth", BitWidth);
                     SampleRate = (int)key.GetValue("SampleRate", SampleRate);
                     Channels = (int)key.GetValue("Channels", Channels);
+                    
+                    // Auto-Detection Flags
+                    IsAutoDetectFormat = Convert.ToBoolean(key.GetValue("IsAutoDetectFormat", IsAutoDetectFormat));
+                    IsAutoBuffer = Convert.ToBoolean(key.GetValue("IsAutoBuffer", IsAutoBuffer));
+                    IsAutoWasapi = Convert.ToBoolean(key.GetValue("IsAutoWasapi", IsAutoWasapi));
                     
                     // Buffer Settings
                     BufferDuration = (int)key.GetValue("BufferDuration", BufferDuration);
@@ -124,6 +136,11 @@ namespace ScreamReader
                     key.SetValue("SampleRate", SampleRate, RegistryValueKind.DWord);
                     key.SetValue("Channels", Channels, RegistryValueKind.DWord);
                     
+                    // Auto-Detection Flags
+                    key.SetValue("IsAutoDetectFormat", IsAutoDetectFormat, RegistryValueKind.DWord);
+                    key.SetValue("IsAutoBuffer", IsAutoBuffer, RegistryValueKind.DWord);
+                    key.SetValue("IsAutoWasapi", IsAutoWasapi, RegistryValueKind.DWord);
+                    
                     // Buffer Settings
                     key.SetValue("BufferDuration", BufferDuration, RegistryValueKind.DWord);
                     key.SetValue("WasapiLatency", WasapiLatency, RegistryValueKind.DWord);
@@ -166,6 +183,9 @@ namespace ScreamReader
                 BitWidth = -1;
                 SampleRate = -1;
                 Channels = -1;
+                IsAutoDetectFormat = true;
+                IsAutoBuffer = true;
+                IsAutoWasapi = true;
                 BufferDuration = -1;
                 WasapiLatency = -1;
                 UseExclusiveMode = false;
@@ -194,6 +214,9 @@ namespace ScreamReader
                 BitWidth = BitWidth,
                 SampleRate = SampleRate,
                 Channels = Channels,
+                IsAutoDetectFormat = IsAutoDetectFormat,
+                IsAutoBuffer = IsAutoBuffer,
+                IsAutoWasapi = IsAutoWasapi,
                 BufferDuration = BufferDuration,
                 WasapiLatency = WasapiLatency,
                 UseExclusiveMode = UseExclusiveMode
@@ -213,6 +236,9 @@ namespace ScreamReader
             BitWidth = config.BitWidth;
             SampleRate = config.SampleRate;
             Channels = config.Channels;
+            IsAutoDetectFormat = config.IsAutoDetectFormat;
+            IsAutoBuffer = config.IsAutoBuffer;
+            IsAutoWasapi = config.IsAutoWasapi;
             BufferDuration = config.BufferDuration;
             WasapiLatency = config.WasapiLatency;
             UseExclusiveMode = config.UseExclusiveMode;
