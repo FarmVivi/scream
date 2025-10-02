@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net.Sockets;
@@ -27,6 +27,15 @@ namespace ScreamReader
         /// Initialize the client with the specific port and optional IP address.
         /// </summary>
         public UnicastUdpWaveStreamPlayer(int bitWidth, int rate, int channels, int unicastPort, IPAddress localAddress = null) : base(bitWidth, rate, channels)
+        {
+            this.unicastPort = unicastPort;
+            this.localAddress = localAddress ?? IPAddress.Any; // Default to any local address
+        }
+
+        /// <summary>
+        /// Initialize the client with audio optimization parameters.
+        /// </summary>
+        public UnicastUdpWaveStreamPlayer(int bitWidth, int rate, int channels, int unicastPort, IPAddress localAddress, int bufferDuration, int wasapiLatency, bool useExclusiveMode) : base(bitWidth, rate, channels, bufferDuration, wasapiLatency, useExclusiveMode)
         {
             this.unicastPort = unicastPort;
             this.localAddress = localAddress ?? IPAddress.Any; // Default to any local address

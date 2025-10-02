@@ -29,6 +29,9 @@ namespace ScreamReader
         protected int BitWidth { get; set; }
         protected int SampleRate { get; set; }
         protected int ChannelCount { get; set; }
+        protected int BufferDuration { get; set; } = -1; // -1 means auto-detect
+        protected int WasapiLatency { get; set; } = -1; // -1 means auto-detect
+        protected bool UseExclusiveMode { get; set; } = false;
         #endregion
 
         #region public properties
@@ -105,6 +108,20 @@ namespace ScreamReader
             this.BitWidth = bitWidth;
             this.SampleRate = rate;
             this.ChannelCount = channels;
+        }
+
+        /// <summary>
+        /// Constructor with audio optimization parameters.
+        /// </summary>
+        public UdpWaveStreamPlayer(int bitWidth, int rate, int channels, int bufferDuration, int wasapiLatency, bool useExclusiveMode)
+            : this()
+        {
+            this.BitWidth = bitWidth;
+            this.SampleRate = rate;
+            this.ChannelCount = channels;
+            this.BufferDuration = bufferDuration;
+            this.WasapiLatency = wasapiLatency;
+            this.UseExclusiveMode = useExclusiveMode;
         }
         #endregion
 
@@ -263,10 +280,18 @@ namespace ScreamReader
         #endregion
 
         /// <summary>
-        /// Detects optimal buffer duration based on system capabilities.
+        /// Gets optimal buffer duration based on user settings or system capabilities.
         /// </summary>
         private TimeSpan GetOptimalBufferDuration()
         {
+            // Use user-specified value if provided
+            if (this.BufferDuration > 0)
+            {
+                Debug.WriteLine($"[UdpWaveStreamPlayer] Using user-specified buffer duration: {this.BufferDuration}ms");
+                return TimeSpan.FromMilliseconds(this.BufferDuration);
+            }
+
+            // Auto-detect based on system capabilities
             try
             {
                 using (var mmDeviceEnum = new MMDeviceEnumerator())
@@ -280,18 +305,21 @@ namespace ScreamReader
                     // For high sample rates (48kHz+), we can use smaller buffers
                     if (format.SampleRate >= 48000)
                     {
-                        return TimeSpan.FromMilliseconds(5); // Ultra-low latency for high-quality devices
+                        Debug.WriteLine("[UdpWaveStreamPlayer] Auto-detected: Using 20ms buffer for high-quality device");
+                        return TimeSpan.FromMilliseconds(20); // Conservative for stability
                     }
                     else
                     {
-                        return TimeSpan.FromMilliseconds(10); // Slightly higher for lower sample rates
+                        Debug.WriteLine("[UdpWaveStreamPlayer] Auto-detected: Using 50ms buffer for standard device");
+                        return TimeSpan.FromMilliseconds(50); // More conservative for lower sample rates
                     }
                 }
             }
             catch (Exception ex)
             {
                 Debug.WriteLine($"[UdpWaveStreamPlayer] Failed to detect optimal buffer duration: {ex.Message}");
-                return TimeSpan.FromMilliseconds(10); // Safe fallback
+                Debug.WriteLine("[UdpWaveStreamPlayer] Using safe fallback: 50ms buffer");
+                return TimeSpan.FromMilliseconds(50); // Safe fallback for stability
             }
         }
 
@@ -335,40 +363,67 @@ namespace ScreamReader
             {
                 var device = mmDeviceEnum.GetDefaultAudioEndpoint(DataFlow.Render, Role.Multimedia);
                 
-                // Try progressively higher latencies until one works
-                int[] latencyOptions = { 10, 15, 20, 30 }; // Start with ultra-low latency
-                bool success = false;
+                // Determine share mode
+                var shareMode = this.UseExclusiveMode ? AudioClientShareMode.Exclusive : AudioClientShareMode.Shared;
                 
-                foreach (int latency in latencyOptions)
+                // Use user-specified latency if provided, otherwise auto-detect
+                if (this.WasapiLatency > 0)
                 {
                     try
                     {
-                        this.output = new WasapiOut(device, AudioClientShareMode.Shared, false, latency);
-                        Debug.WriteLine($"[UdpWaveStreamPlayer] Using Shared mode with {latency}ms latency");
-                        success = true;
-                        break;
+                        this.output = new WasapiOut(device, shareMode, false, this.WasapiLatency);
+                        Debug.WriteLine($"[UdpWaveStreamPlayer] Using user-specified {shareMode} mode with {this.WasapiLatency}ms latency");
                     }
                     catch (Exception ex)
                     {
-                        Debug.WriteLine($"[UdpWaveStreamPlayer] Failed to initialize with {latency}ms latency: {ex.Message}");
-                        if (this.output != null)
-                        {
-                            this.output.Dispose();
-                            this.output = null;
-                        }
+                        Debug.WriteLine($"[UdpWaveStreamPlayer] Failed with user-specified latency: {ex.Message}");
+                        Debug.WriteLine("[UdpWaveStreamPlayer] Falling back to auto-detection...");
+                        InitializeWithAutoDetection(device, shareMode);
                     }
                 }
-                
-                if (!success)
+                else
                 {
-                    throw new InvalidOperationException("Failed to initialize WasapiOut with any latency setting");
+                    InitializeWithAutoDetection(device, shareMode);
                 }
             }
+        }
 
-            this.currentWaveProvider = waveProvider;
-            this.output.Init(this.currentWaveProvider);
-            this.output.Volume = (float)this.volume / 100f;
-            this.output.Play();
+        /// <summary>
+        /// Initializes WasapiOut with auto-detected optimal latency settings.
+        /// </summary>
+        private void InitializeWithAutoDetection(MMDevice device, AudioClientShareMode shareMode)
+        {
+            // Try progressively higher latencies until one works
+            int[] latencyOptions = shareMode == AudioClientShareMode.Exclusive 
+                ? new int[] { 10, 20, 30, 50 }  // Exclusive mode can handle lower latencies
+                : new int[] { 50, 100, 150, 200 }; // Shared mode needs higher latencies for stability
+            
+            bool success = false;
+            
+            foreach (int latency in latencyOptions)
+            {
+                try
+                {
+                    this.output = new WasapiOut(device, shareMode, false, latency);
+                    Debug.WriteLine($"[UdpWaveStreamPlayer] Auto-detected: Using {shareMode} mode with {latency}ms latency");
+                    success = true;
+                    break;
+                }
+                catch (Exception ex)
+                {
+                    Debug.WriteLine($"[UdpWaveStreamPlayer] Failed to initialize with {latency}ms latency: {ex.Message}");
+                    if (this.output != null)
+                    {
+                        this.output.Dispose();
+                        this.output = null;
+                    }
+                }
+            }
+            
+            if (!success)
+            {
+                throw new InvalidOperationException($"Failed to initialize WasapiOut with {shareMode} mode and any latency setting");
+            }
         }
 
         #region dispose

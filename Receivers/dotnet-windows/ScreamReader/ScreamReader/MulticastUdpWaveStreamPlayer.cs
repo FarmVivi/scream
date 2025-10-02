@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net;
@@ -27,6 +27,15 @@ namespace ScreamReader
         /// Initialize the client with the specific address, port and format.
         /// </summary>
         public MulticastUdpWaveStreamPlayer(int bitWidth, int rate, int channels, int multicastPort, IPAddress multicastAddress) : base(bitWidth, rate, channels)
+        {
+            this.multicastPort = multicastPort;
+            this.multicastAddress = multicastAddress;
+        }
+
+        /// <summary>
+        /// Initialize the client with audio optimization parameters.
+        /// </summary>
+        public MulticastUdpWaveStreamPlayer(int bitWidth, int rate, int channels, int multicastPort, IPAddress multicastAddress, int bufferDuration, int wasapiLatency, bool useExclusiveMode) : base(bitWidth, rate, channels, bufferDuration, wasapiLatency, useExclusiveMode)
         {
             this.multicastPort = multicastPort;
             this.multicastAddress = multicastAddress;

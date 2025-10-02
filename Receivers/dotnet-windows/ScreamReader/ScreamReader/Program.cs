@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Net;
 using System.Windows.Forms;
 
@@ -17,6 +17,9 @@ namespace ScreamReader
             int bitWidth = 16;          // Default bit width
             int rate = 44100;           // Default sample rate
             int channels = 2;           // Default channels (stéréo)
+            int bufferDuration = -1;   // Default buffer duration (auto-detect)
+            int wasapiLatency = -1;    // Default WasapiOut latency (auto-detect)
+            bool useExclusiveMode = false; // Default to Shared mode
 
             bool multicastIpSpecified = true;
 
@@ -118,6 +121,52 @@ namespace ScreamReader
                     }
                     i++;
                 }
+                else if (arg == "--buffer-duration")
+                {
+                    if (i + 1 >= args.Length)
+                    {
+                        Console.WriteLine("Buffer duration must be specified after --buffer-duration");
+                        Environment.Exit(1);
+                    }
+                    if (!int.TryParse(args[i + 1], out bufferDuration))
+                    {
+                        Console.WriteLine("Buffer duration must be an integer (milliseconds)");
+                        Environment.Exit(1);
+                    }
+                    if (bufferDuration < 1 || bufferDuration > 1000)
+                    {
+                        Console.WriteLine("Buffer duration must be between 1 and 1000 milliseconds");
+                        Environment.Exit(1);
+                    }
+                    i++;
+                }
+                else if (arg == "--wasapi-latency")
+                {
+                    if (i + 1 >= args.Length)
+                    {
+                        Console.WriteLine("WasapiOut latency must be specified after --wasapi-latency");
+                        Environment.Exit(1);
+                    }
+                    if (!int.TryParse(args[i + 1], out wasapiLatency))
+                    {
+                        Console.WriteLine("WasapiOut latency must be an integer (milliseconds)");
+                        Environment.Exit(1);
+                    }
+                    if (wasapiLatency < 1 || wasapiLatency > 1000)
+                    {
+                        Console.WriteLine("WasapiOut latency must be between 1 and 1000 milliseconds");
+                        Environment.Exit(1);
+                    }
+                    i++;
+                }
+                else if (arg == "--exclusive-mode")
+                {
+                    useExclusiveMode = true;
+                }
+                else if (arg == "--shared-mode")
+                {
+                    useExclusiveMode = false;
+                }
             }
 
             // Specify default port if not specified
@@ -147,7 +196,7 @@ namespace ScreamReader
             }
 
             // Launch the application
-            startScreamReader(bitWidth, rate, channels, port, ipAddress, multicastIpSpecified);
+            startScreamReader(bitWidth, rate, channels, port, ipAddress, multicastIpSpecified, bufferDuration, wasapiLatency, useExclusiveMode);
         }
 
         private static void ShowHelp()
@@ -160,15 +209,24 @@ namespace ScreamReader
             Console.WriteLine("\t--bit-width <val>    : Specify bit depth (e.g., 16, 24, 32) (default 16)");
             Console.WriteLine("\t--rate <val>         : Specify sample rate (e.g., 44100, 48000) (default 44100)");
             Console.WriteLine("\t--channels <val>     : Specify number of channels (1 = mono, 2 = stereo, etc.) (default 2)");
+            Console.WriteLine("\t--buffer-duration <ms> : Buffer duration in milliseconds (default: auto-detect)");
+            Console.WriteLine("\t--wasapi-latency <ms>  : WasapiOut latency in milliseconds (default: auto-detect)");
+            Console.WriteLine("\t--exclusive-mode    : Use exclusive audio mode (lower latency, no mixer visibility)");
+            Console.WriteLine("\t--shared-mode       : Use shared audio mode (default, appears in mixer)");
             Console.WriteLine("\t--help or -h         : Show this help");
+            Console.WriteLine("");
+            Console.WriteLine("Audio Quality Recommendations:");
+            Console.WriteLine("\tFor best quality (no crackling): --buffer-duration 50 --wasapi-latency 100");
+            Console.WriteLine("\tFor low latency: --buffer-duration 10 --wasapi-latency 20");
+            Console.WriteLine("\tFor ultra-low latency: --exclusive-mode --buffer-duration 5 --wasapi-latency 10");
         }
 
         [STAThread]
-        static void startScreamReader(int bitWidth, int rate, int channels, int port, IPAddress ipAddress, bool multicast)
+        static void startScreamReader(int bitWidth, int rate, int channels, int port, IPAddress ipAddress, bool multicast, int bufferDuration, int wasapiLatency, bool useExclusiveMode)
         {
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
-            Application.Run(new ScreamReaderTray(bitWidth, rate, channels, port, ipAddress, multicast));
+            Application.Run(new ScreamReaderTray(bitWidth, rate, channels, port, ipAddress, multicast, bufferDuration, wasapiLatency, useExclusiveMode));
         }
     }
 
@@ -180,15 +238,15 @@ namespace ScreamReader
         internal UdpWaveStreamPlayer udpPlayer;
         private MainForm mainForm;
 
-        public ScreamReaderTray(int bitWidth, int rate, int channels, int port, IPAddress ipAddress, bool multicast)
+        public ScreamReaderTray(int bitWidth, int rate, int channels, int port, IPAddress ipAddress, bool multicast, int bufferDuration, int wasapiLatency, bool useExclusiveMode)
         {
             if (multicast)
             {
-                this.udpPlayer = new MulticastUdpWaveStreamPlayer(bitWidth, rate, channels, port, ipAddress);
+                this.udpPlayer = new MulticastUdpWaveStreamPlayer(bitWidth, rate, channels, port, ipAddress, bufferDuration, wasapiLatency, useExclusiveMode);
             }
             else
             {
-                this.udpPlayer = new UnicastUdpWaveStreamPlayer(bitWidth, rate, channels, port, ipAddress);
+                this.udpPlayer = new UnicastUdpWaveStreamPlayer(bitWidth, rate, channels, port, ipAddress, bufferDuration, wasapiLatency, useExclusiveMode);
             }
 
             this.udpPlayer.Start();
