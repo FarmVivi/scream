@@ -421,6 +421,15 @@ namespace ScreamReader
                     InitializeWithAutoDetection(device, shareMode);
                 }
             }
+
+            this.currentWaveProvider = waveProvider;
+            LogManager.Log("[UdpWaveStreamPlayer] Initializing WasapiOut with wave provider...");
+            this.output.Init(this.currentWaveProvider);
+            LogManager.Log("[UdpWaveStreamPlayer] Setting volume...");
+            this.output.Volume = (float)this.volume / 100f;
+            LogManager.Log("[UdpWaveStreamPlayer] Starting audio playback...");
+            this.output.Play();
+            LogManager.Log("[UdpWaveStreamPlayer] Audio playback started successfully");
         }
 
         /// <summary>
@@ -459,15 +468,6 @@ namespace ScreamReader
             {
                 throw new InvalidOperationException($"Failed to initialize WasapiOut with {shareMode} mode and any latency setting");
             }
-
-            this.currentWaveProvider = waveProvider;
-            LogManager.Log("[UdpWaveStreamPlayer] Initializing WasapiOut with wave provider...");
-            this.output.Init(this.currentWaveProvider);
-            LogManager.Log("[UdpWaveStreamPlayer] Setting volume...");
-            this.output.Volume = (float)this.volume / 100f;
-            LogManager.Log("[UdpWaveStreamPlayer] Starting audio playback...");
-            this.output.Play();
-            LogManager.Log("[UdpWaveStreamPlayer] Audio playback started successfully");
         }
 
         #region dispose
