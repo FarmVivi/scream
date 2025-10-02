@@ -37,6 +37,15 @@ namespace ScreamReader
 
         // Adaptive buffer management
         private AdaptiveBufferManager bufferManager;
+        
+        // Statistics tracking
+        private StreamStats currentStats;
+        private readonly object statsLock = new object();
+        private DateTime connectionStartTime;
+        private long packetCount = 0;
+        private long byteCount = 0;
+        private double packetsPerSecondSmoothed = 0;
+        private double bytesPerSecondSmoothed = 0;
         #endregion
 
         #region public properties
@@ -78,6 +87,9 @@ namespace ScreamReader
             this.startLock = new Semaphore(1, 1);
             this.shutdownLock = new Semaphore(0, 1);
 
+            // Initialize stats
+            this.currentStats = new StreamStats();
+
             // Prepare the UdpClient
             this.udpClient = new UdpClient
             {
@@ -104,6 +116,17 @@ namespace ScreamReader
                 LogManager.Log($"[UdpWaveStreamPlayer] Failed to register device notifications: {ex.Message}");
                 // Fallback to default volume if we can't get system volume
                 this.volume = 50;
+            }
+        }
+        
+        /// <summary>
+        /// Gets the current stream statistics (thread-safe)
+        /// </summary>
+        public StreamStats GetCurrentStats()
+        {
+            lock (statsLock)
+            {
+                return currentStats?.Clone();
             }
         }
 
@@ -161,6 +184,9 @@ namespace ScreamReader
                 this.BitWidth,
                 this.SampleRate
             );
+            
+            // Appliquer les recommandations WASAPI de la session précédente
+            this.bufferManager.ApplyRecommendedWasapiLatency();
 
             // Run in background with high priority
             Task.Run(() =>
@@ -197,9 +223,21 @@ namespace ScreamReader
                     LogManager.Log("[UdpWaveStreamPlayer] Starting UDP receive loop...");
                     LogManager.Log("[UdpWaveStreamPlayer] Waiting for audio data...");
                     
-                    int packetCount = 0;
+                    int localPacketCount = 0;
                     var lastLogTime = DateTime.Now;
                     var lastStatsLogTime = DateTime.Now;
+                    var lastStatsUpdateTime = DateTime.Now;
+                    connectionStartTime = DateTime.Now;
+                    
+                    // Initialize stats
+                    lock (statsLock)
+                    {
+                        currentStats.IsConnected = false;
+                        currentStats.ConnectionTime = connectionStartTime;
+                        currentStats.SampleRate = this.SampleRate;
+                        currentStats.BitDepth = this.BitWidth;
+                        currentStats.Channels = this.ChannelCount;
+                    }
                     
                     // Start reading loop
                     while (!this.cancellationTokenSource.IsCancellationRequested)
@@ -207,21 +245,55 @@ namespace ScreamReader
                         try
                         {
                             byte[] data = this.udpClient.Receive(ref localEp);
-                            packetCount++;
+                            localPacketCount++;
                             
-                            if (packetCount <= 5) // Log first 5 packets in detail
+                            // Update stats
+                            lock (statsLock)
                             {
-                                LogManager.LogDebug($"[UdpWaveStreamPlayer] Received packet #{packetCount}: {data.Length} bytes from {localEp}");
-                                if (data.Length >= 5)
+                                if (!currentStats.IsConnected)
                                 {
-                                    LogManager.Log($"[UdpWaveStreamPlayer] Header: rate={data[0]}, width={data[1]}, channels={data[2]}, map_lsb={data[3]}, map_msb={data[4]}");
+                                    currentStats.IsConnected = true;
+                                    currentStats.RemoteEndpoint = localEp.ToString();
+                                    LogManager.LogInfo($"✓ Connecté à {localEp}");
+                                }
+
+                                this.packetCount++;
+                                this.byteCount += data.Length;
+                                currentStats.TotalPacketsReceived = this.packetCount;
+                                currentStats.TotalBytesReceived = this.byteCount;
+
+                                // Update rate calculations every 100ms
+                                var now = DateTime.Now;
+                                var elapsed = (now - lastStatsUpdateTime).TotalSeconds;
+                                if (elapsed >= 0.1)
+                                {
+                                    var instantPacketsPerSec = 1.0 / elapsed;
+                                    var instantBytesPerSec = data.Length / elapsed;
+                                    
+                                    // Smooth with exponential moving average
+                                    packetsPerSecondSmoothed = packetsPerSecondSmoothed * 0.8 + instantPacketsPerSec * 0.2;
+                                    bytesPerSecondSmoothed = bytesPerSecondSmoothed * 0.8 + instantBytesPerSec * 0.2;
+                                    
+                                    currentStats.PacketsPerSecond = packetsPerSecondSmoothed;
+                                    currentStats.BytesPerSecond = bytesPerSecondSmoothed;
+                                    
+                                    lastStatsUpdateTime = now;
                                 }
                             }
-                            else if (packetCount % 200 == 0) // Log every 200th packet to reduce log spam
+                            
+                            if (localPacketCount <= 5) // Log first 5 packets in detail
+                            {
+                                LogManager.LogDebug($"[UdpWaveStreamPlayer] Received packet #{localPacketCount}: {data.Length} bytes from {localEp}");
+                                if (data.Length >= 5)
+                                {
+                                    LogManager.LogInfo($"[UdpWaveStreamPlayer] Header: rate={data[0]}, width={data[1]}, channels={data[2]}, map_lsb={data[3]}, map_msb={data[4]}");
+                                }
+                            }
+                            else if (localPacketCount % 200 == 0) // Log every 200th packet to reduce log spam
                             {
                                 var elapsed = DateTime.Now - lastLogTime;
                                 var packetsPerSecond = 200.0 / elapsed.TotalSeconds;
-                                LogManager.LogDebug($"[UdpWaveStreamPlayer] Received {packetCount} packets so far... ({packetsPerSecond:F1} packets/sec)");
+                                LogManager.LogDebug($"[UdpWaveStreamPlayer] Received {localPacketCount} packets so far... ({packetsPerSecond:F1} packets/sec)");
                                 lastLogTime = DateTime.Now;
                             }
 
@@ -272,32 +344,33 @@ namespace ScreamReader
                             rsws.AddSamples(data, 5, data.Length - 5);
                             
                             // Monitor buffer status and adapt every 25 packets (plus léger)
-                            if (packetCount % 25 == 0)
+                            if (localPacketCount % 25 == 0)
                             {
                                 var bufferedMs = rsws.BufferedDuration.TotalMilliseconds;
                                 var bufferCapacityMs = rsws.BufferDuration.TotalMilliseconds;
                                 
                                 // Enregistrer la mesure pour l'adaptation
-                                bufferManager.RecordMeasurement(bufferedMs, (int)bufferCapacityMs, packetCount);
+                                bufferManager.RecordMeasurement(bufferedMs, (int)bufferCapacityMs, localPacketCount);
                                 
-                                // Mettre à jour le buffer si nécessaire (uniquement en mode adaptatif)
-                                if (bufferManager.IsAdaptive)
+                                // Update buffer stats
+                                lock (statsLock)
                                 {
-                                    var newBufferDuration = TimeSpan.FromMilliseconds(bufferManager.CurrentBufferDurationMs);
-                                    if (Math.Abs(newBufferDuration.TotalMilliseconds - rsws.BufferDuration.TotalMilliseconds) > 1)
-                                    {
-                                        // Le buffer a été ajusté, il faut recréer le BufferedWaveProvider
-                                        // Note: on ne peut pas changer BufferDuration dynamiquement, 
-                                        // mais les ajustements WASAPI se feront au prochain changement de format
-                                        LogManager.LogDebug($"[UdpWaveStreamPlayer] Ajustement buffer prévu: {rsws.BufferDuration.TotalMilliseconds}ms -> {newBufferDuration.TotalMilliseconds}ms");
-                                    }
+                                    currentStats.NetworkBuffer.UpdateMeasurement(bufferedMs, bufferCapacityMs);
+                                    currentStats.WasapiBuffer.UpdateMeasurement(
+                                        bufferManager.ActualWasapiLatencyMs,
+                                        bufferManager.ActualWasapiLatencyMs
+                                    );
                                 }
+                                
+                                // Note: Le buffer réseau (BufferedWaveProvider) ne peut pas être ajusté dynamiquement
+                                // Les ajustements prendront effet lors du prochain changement de format audio
+                                // WASAPI ne peut également pas être changé sans recréer WasapiOut
                             }
                             
-                            // Log statistiques périodiques (toutes les 10 secondes)
+                            // Log statistiques périodiques en debug (stats déjà dans l'UI)
                             if ((DateTime.Now - lastStatsLogTime).TotalSeconds >= 10)
                             {
-                                LogManager.Log($"[UdpWaveStreamPlayer] Stats: {bufferManager.GetStatistics()}");
+                                LogManager.LogDebug($"[UdpWaveStreamPlayer] Stats: {bufferManager.GetStatistics()}");
                                 lastStatsLogTime = DateTime.Now;
                             }
                         }
@@ -343,6 +416,9 @@ namespace ScreamReader
         /// </summary>
         public void Stop()
         {
+            // Analyser les performances long terme avant d'arrêter
+            this.bufferManager?.AnalyzeLongTermPerformance();
+            
             this.cancellationTokenSource?.Cancel();
             this.shutdownLock.Release();
         }
@@ -446,6 +522,10 @@ namespace ScreamReader
                     {
                         this.output = new WasapiOut(device, shareMode, false, latency);
                         LogManager.Log($"[UdpWaveStreamPlayer] ✓ Initialized {shareMode} mode with {latency}ms WASAPI latency");
+                        
+                        // Enregistrer la latence WASAPI réelle qui a fonctionné
+                        bufferManager?.SetActualWasapiLatency(latency);
+                        
                         success = true;
                         break;
                     }

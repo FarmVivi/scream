@@ -3,114 +3,178 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Windows.Forms;
+using System.Drawing;
 
 namespace ScreamReader
 {
     /// <summary>
-    /// Manages logging for ScreamReader with GUI support
+    /// Log severity levels
+    /// </summary>
+    public enum LogLevel
+    {
+        Debug = 0,
+        Info = 1,
+        Warning = 2,
+        Error = 3
+    }
+
+    /// <summary>
+    /// Represents a single log entry
+    /// </summary>
+    public class LogEntry
+    {
+        public DateTime Timestamp { get; set; }
+        public LogLevel Level { get; set; }
+        public string Message { get; set; }
+        public Color Color
+        {
+            get
+            {
+                switch (Level)
+                {
+                    case LogLevel.Debug: return Color.FromArgb(150, 150, 150);  // Gris clair (lisible sur fond noir)
+                    case LogLevel.Info: return Color.White;                      // Blanc (lisible sur fond noir)
+                    case LogLevel.Warning: return Color.DarkOrange;              // Orange (d\u00e9j\u00e0 OK)
+                    case LogLevel.Error: return Color.Red;                       // Rouge (d\u00e9j\u00e0 OK)
+                    default: return Color.White;                                // Par d\u00e9faut blanc
+                }
+            }
+        }
+
+        public override string ToString()
+        {
+            return $"[{Timestamp:HH:mm:ss.fff}] [{Level.ToString().ToUpper()}] {Message}";
+        }
+    }
+
+    /// <summary>
+    /// Manages logging for ScreamReader with multi-level support and GUI integration
     /// </summary>
     public static class LogManager
     {
-        private static readonly List<string> logs = new List<string>();
+        private static readonly List<LogEntry> logs = new List<LogEntry>();
         private static readonly object lockObject = new object();
-        private static LogWindow logWindow = null;
-        private static bool showDebugLogs = true;
+        private static LogLevel minimumLevel = LogLevel.Info;
+        
+        // Event for real-time log updates
+        public static event EventHandler<LogEntry> LogAdded;
+
+        // Maximum logs to keep in memory
+        private const int MaxLogEntries = 2000;
 
         /// <summary>
-        /// Adds a log entry with timestamp
+        /// Sets the minimum log level to display
         /// </summary>
-        public static void Log(string message)
+        public static void SetMinimumLevel(LogLevel level)
         {
             lock (lockObject)
             {
-                string timestamp = DateTime.Now.ToString("HH:mm:ss.fff");
-                string logEntry = $"[{timestamp}] {message}";
-                logs.Add(logEntry);
-                
-                // Keep only last 1000 entries to prevent memory issues
-                if (logs.Count > 1000)
+                minimumLevel = level;
+            }
+        }
+
+        /// <summary>
+        /// Gets the current minimum log level
+        /// </summary>
+        public static LogLevel GetMinimumLevel()
+        {
+            lock (lockObject)
+            {
+                return minimumLevel;
+            }
+        }
+
+        /// <summary>
+        /// Adds a log entry
+        /// </summary>
+        private static void AddLog(LogLevel level, string message)
+        {
+            lock (lockObject)
+            {
+                var entry = new LogEntry
+                {
+                    Timestamp = DateTime.Now,
+                    Level = level,
+                    Message = message
+                };
+
+                logs.Add(entry);
+
+                // Keep only last MaxLogEntries to prevent memory issues
+                if (logs.Count > MaxLogEntries)
                 {
                     logs.RemoveAt(0);
                 }
-                
-                // Update log window if it's open
-                if (logWindow != null && !logWindow.IsDisposed)
+
+                // Raise event for UI updates (only if level is visible)
+                if (level >= minimumLevel)
                 {
-                    logWindow.Invoke(new Action(() => logWindow.AddLog(logEntry)));
+                    LogAdded?.Invoke(null, entry);
                 }
             }
         }
 
         /// <summary>
-        /// Adds a debug log entry with timestamp (only shown if debug logs are enabled)
+        /// Logs a debug message
         /// </summary>
         public static void LogDebug(string message)
         {
-            if (!showDebugLogs) return;
-            
+            AddLog(LogLevel.Debug, message);
+        }
+
+        /// <summary>
+        /// Logs an info message
+        /// </summary>
+        public static void Log(string message)
+        {
+            AddLog(LogLevel.Info, message);
+        }
+
+        /// <summary>
+        /// Logs an info message (alias for Log)
+        /// </summary>
+        public static void LogInfo(string message)
+        {
+            AddLog(LogLevel.Info, message);
+        }
+
+        /// <summary>
+        /// Logs a warning message
+        /// </summary>
+        public static void LogWarning(string message)
+        {
+            AddLog(LogLevel.Warning, message);
+        }
+
+        /// <summary>
+        /// Logs an error message
+        /// </summary>
+        public static void LogError(string message)
+        {
+            AddLog(LogLevel.Error, message);
+        }
+
+        /// <summary>
+        /// Gets all logs filtered by minimum level
+        /// </summary>
+        public static List<LogEntry> GetLogs(LogLevel? filterLevel = null)
+        {
             lock (lockObject)
             {
-                string timestamp = DateTime.Now.ToString("HH:mm:ss.fff");
-                string logEntry = $"[{timestamp}] [DEBUG] {message}";
-                logs.Add(logEntry);
-                
-                // Keep only last 1000 entries to prevent memory issues
-                if (logs.Count > 1000)
-                {
-                    logs.RemoveAt(0);
-                }
-                
-                // Update log window if it's open
-                if (logWindow != null && !logWindow.IsDisposed)
-                {
-                    logWindow.Invoke(new Action(() => logWindow.AddLog(logEntry)));
-                }
+                var level = filterLevel ?? minimumLevel;
+                return logs.Where(log => log.Level >= level).ToList();
             }
         }
 
         /// <summary>
-        /// Sets whether debug logs should be shown
+        /// Gets all logs as formatted strings
         /// </summary>
-        public static void SetShowDebugLogs(bool show)
+        public static string GetAllLogs(LogLevel? filterLevel = null)
         {
             lock (lockObject)
             {
-                showDebugLogs = show;
-                if (logWindow != null && !logWindow.IsDisposed)
-                {
-                    logWindow.Invoke(new Action(() => logWindow.RefreshLogs()));
-                }
-            }
-        }
-
-        /// <summary>
-        /// Gets whether debug logs are currently shown
-        /// </summary>
-        public static bool GetShowDebugLogs()
-        {
-            lock (lockObject)
-            {
-                return showDebugLogs;
-            }
-        }
-
-        /// <summary>
-        /// Gets all logs as a formatted string, filtering debug logs if needed
-        /// </summary>
-        public static string GetAllLogs()
-        {
-            lock (lockObject)
-            {
-                if (showDebugLogs)
-                {
-                    return string.Join(Environment.NewLine, logs);
-                }
-                else
-                {
-                    // Filter out debug logs
-                    var filteredLogs = logs.Where(log => !log.Contains("[DEBUG]")).ToList();
-                    return string.Join(Environment.NewLine, filteredLogs);
-                }
+                var filteredLogs = GetLogs(filterLevel);
+                return string.Join(Environment.NewLine, filteredLogs.Select(l => l.ToString()));
             }
         }
 
@@ -122,25 +186,7 @@ namespace ScreamReader
             lock (lockObject)
             {
                 logs.Clear();
-                if (logWindow != null && !logWindow.IsDisposed)
-                {
-                    logWindow.Invoke(new Action(() => logWindow.ClearLogs()));
-                }
             }
-        }
-
-        /// <summary>
-        /// Shows the log window
-        /// </summary>
-        public static void ShowLogWindow()
-        {
-            if (logWindow == null || logWindow.IsDisposed)
-            {
-                logWindow = new LogWindow();
-            }
-            
-            logWindow.Show();
-            logWindow.BringToFront();
         }
 
         /// <summary>
@@ -151,6 +197,17 @@ namespace ScreamReader
             lock (lockObject)
             {
                 return logs.Count;
+            }
+        }
+
+        /// <summary>
+        /// Gets the count of logs at or above a certain level
+        /// </summary>
+        public static int GetLogCount(LogLevel level)
+        {
+            lock (lockObject)
+            {
+                return logs.Count(log => log.Level >= level);
             }
         }
     }

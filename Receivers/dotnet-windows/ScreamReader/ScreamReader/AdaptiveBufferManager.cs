@@ -35,20 +35,32 @@ namespace ScreamReader
 
         #region State Variables
         private int currentBufferDurationMs;
-        private int currentWasapiLatencyMs;
+        private int currentWasapiLatencyMs;             // Valeur cible (utilisée lors des recreations)
+        private int actualWasapiLatencyMs;              // Valeur réelle actuellement utilisée (fixe)
         private int consecutiveLowBufferWarnings;
         private int consecutiveStablePackets;
         private DateTime lastAdjustmentTime;
         private readonly bool isUserSpecified;          // L'utilisateur a-t-il spécifié des valeurs manuelles ?
         private readonly Queue<BufferMeasurement> recentMeasurements;
         private const int MEASUREMENT_HISTORY_SIZE = 20;
+        
+        // Statistiques long terme pour analyse intelligente
+        private readonly List<double> longTermBufferFills;         // Historique des % de remplissage
+        private readonly List<double> longTermBufferedMs;          // Historique des ms bufferisées
+        private int recommendedWasapiLatency;                      // Latence WASAPI recommandée après analyse
+        private const int LONG_TERM_HISTORY_SIZE = 1000;           // ~100s à 10Hz
+        private DateTime sessionStartTime;
+        private bool hasLongTermAnalysis;
         #endregion
 
         #region Properties
         public int CurrentBufferDurationMs => currentBufferDurationMs;
-        public int CurrentWasapiLatencyMs => currentWasapiLatencyMs;
-        public double TotalLatencyMs => currentBufferDurationMs + currentWasapiLatencyMs;
+        public int CurrentWasapiLatencyMs => currentWasapiLatencyMs;     // Valeur cible
+        public int ActualWasapiLatencyMs => actualWasapiLatencyMs;       // Valeur réelle
+        public double TotalLatencyMs => currentBufferDurationMs + actualWasapiLatencyMs;
         public bool IsAdaptive => !isUserSpecified;
+        public int RecommendedWasapiLatency => recommendedWasapiLatency; // Suggestion après analyse
+        public bool HasLongTermAnalysis => hasLongTermAnalysis;
         #endregion
 
         public AdaptiveBufferManager(int userBufferDuration, int userWasapiLatency, bool useExclusiveMode, int bitWidth, int sampleRate)
@@ -56,18 +68,27 @@ namespace ScreamReader
             this.recentMeasurements = new Queue<BufferMeasurement>(MEASUREMENT_HISTORY_SIZE);
             this.lastAdjustmentTime = DateTime.Now;
             this.isUserSpecified = (userBufferDuration > 0 || userWasapiLatency > 0);
+            
+            // Initialiser les statistiques long terme
+            this.longTermBufferFills = new List<double>(LONG_TERM_HISTORY_SIZE);
+            this.longTermBufferedMs = new List<double>(LONG_TERM_HISTORY_SIZE);
+            this.sessionStartTime = DateTime.Now;
+            this.hasLongTermAnalysis = false;
 
             if (isUserSpecified)
             {
                 // L'utilisateur a spécifié des valeurs, les utiliser directement
                 this.currentBufferDurationMs = userBufferDuration > 0 ? userBufferDuration : TARGET_BUFFER_MS;
                 this.currentWasapiLatencyMs = userWasapiLatency > 0 ? userWasapiLatency : TARGET_WASAPI_MS;
+                this.actualWasapiLatencyMs = this.currentWasapiLatencyMs;
+                this.recommendedWasapiLatency = this.currentWasapiLatencyMs;
                 LogManager.Log($"[AdaptiveBuffer] Mode manuel: Buffer={currentBufferDurationMs}ms, WASAPI={currentWasapiLatencyMs}ms");
             }
             else
             {
                 // Mode adaptatif intelligent basé sur les caractéristiques audio
                 InitializeAdaptiveBuffers(useExclusiveMode, bitWidth, sampleRate);
+                this.recommendedWasapiLatency = this.currentWasapiLatencyMs;
             }
         }
 
@@ -105,6 +126,9 @@ namespace ScreamReader
                 LogManager.Log($"[AdaptiveBuffer] Audio haute résolution détecté ({bitWidth}bit/{sampleRate}Hz): ajustement +10ms");
             }
 
+            // Initialiser la latence WASAPI réelle
+            this.actualWasapiLatencyMs = this.currentWasapiLatencyMs;
+            
             LogManager.Log($"[AdaptiveBuffer] Mode adaptatif initialisé: Buffer={currentBufferDurationMs}ms, WASAPI={currentWasapiLatencyMs}ms");
             LogManager.Log($"[AdaptiveBuffer] Latence totale estimée: {TotalLatencyMs}ms");
         }
@@ -125,6 +149,9 @@ namespace ScreamReader
             recentMeasurements.Enqueue(measurement);
             if (recentMeasurements.Count > MEASUREMENT_HISTORY_SIZE)
                 recentMeasurements.Dequeue();
+            
+            // Enregistrer dans l'historique long terme
+            RecordLongTermStats(bufferedMs, measurement.FillPercentage);
 
             // Ne pas ajuster si l'utilisateur a spécifié des valeurs
             if (!IsAdaptive)
@@ -132,6 +159,22 @@ namespace ScreamReader
 
             // Analyser et ajuster
             AnalyzeAndAdjust(measurement, packetCount);
+        }
+        
+        /// <summary>
+        /// Enregistre les statistiques dans l'historique long terme
+        /// </summary>
+        private void RecordLongTermStats(double bufferedMs, double fillPercentage)
+        {
+            longTermBufferedMs.Add(bufferedMs);
+            longTermBufferFills.Add(fillPercentage);
+            
+            // Limiter la taille pour éviter la croissance infinie
+            if (longTermBufferedMs.Count > LONG_TERM_HISTORY_SIZE)
+            {
+                longTermBufferedMs.RemoveAt(0);
+                longTermBufferFills.RemoveAt(0);
+            }
         }
 
         /// <summary>
@@ -192,10 +235,10 @@ namespace ScreamReader
                 consecutiveLowBufferWarnings = 0;
                 consecutiveStablePackets++;
 
-                // Log périodique du bon fonctionnement
+                // Stats déjà affichées dans l'UI, log debug uniquement
                 if (packetCount % 500 == 0)
                 {
-                    LogManager.Log($"[AdaptiveBuffer] ✓ Stable: {bufferedMs:F1}ms ({fillPercentage:P0}), Latence totale: {TotalLatencyMs}ms");
+                    LogManager.LogDebug($"[AdaptiveBuffer] ✓ Stable: {bufferedMs:F1}ms ({fillPercentage:P0}), Latence totale: {TotalLatencyMs}ms");
                 }
             }
         }
@@ -214,11 +257,8 @@ namespace ScreamReader
                 currentBufferDurationMs = Math.Min(MAX_BUFFER_MS, currentBufferDurationMs + ADJUSTMENT_STEP_MS * 2);
             }
 
-            // Augmenter légèrement WASAPI aussi
-            if (currentWasapiLatencyMs < MAX_WASAPI_MS)
-            {
-                currentWasapiLatencyMs = Math.Min(MAX_WASAPI_MS, currentWasapiLatencyMs + ADJUSTMENT_STEP_MS);
-            }
+            // Note: WASAPI ne peut pas être ajusté en temps réel (nécessite recréation WasapiOut)
+            // La valeur currentWasapiLatencyMs sera utilisée lors du prochain changement de format
 
             lastAdjustmentTime = DateTime.Now;
             
@@ -242,11 +282,8 @@ namespace ScreamReader
                 currentBufferDurationMs = Math.Max(MIN_BUFFER_MS, currentBufferDurationMs - ADJUSTMENT_STEP_MS);
             }
 
-            // Réduire WASAPI aussi mais plus doucement
-            if (currentWasapiLatencyMs > MIN_WASAPI_MS)
-            {
-                currentWasapiLatencyMs = Math.Max(MIN_WASAPI_MS, currentWasapiLatencyMs - ADJUSTMENT_STEP_MS / 2);
-            }
+            // Note: WASAPI ne peut pas être ajusté en temps réel (nécessite recréation WasapiOut)
+            // La valeur currentWasapiLatencyMs sera utilisée lors du prochain changement de format
 
             lastAdjustmentTime = DateTime.Now;
 
@@ -254,6 +291,15 @@ namespace ScreamReader
             LogManager.Log($"[AdaptiveBuffer]    Buffer: {oldBufferMs}ms → {currentBufferDurationMs}ms ({currentBufferDurationMs - oldBufferMs}ms)");
             LogManager.Log($"[AdaptiveBuffer]    WASAPI: {oldWasapiMs}ms → {currentWasapiLatencyMs}ms ({currentWasapiLatencyMs - oldWasapiMs}ms)");
             LogManager.Log($"[AdaptiveBuffer]    Latence totale: {TotalLatencyMs}ms");
+        }
+
+        /// <summary>
+        /// Met à jour la latence WASAPI réelle après création/recréation de WasapiOut
+        /// </summary>
+        public void SetActualWasapiLatency(int actualLatencyMs)
+        {
+            this.actualWasapiLatencyMs = actualLatencyMs;
+            LogManager.LogDebug($"[AdaptiveBuffer] WASAPI réel initialisé: {actualLatencyMs}ms");
         }
 
         /// <summary>
@@ -271,6 +317,142 @@ namespace ScreamReader
             var avgBufferedMs = measurements.Average(m => m.BufferedMs);
 
             return $"Buffer moyen: {avgBufferedMs:F1}ms, Remplissage: {avgFill:P0} (min: {minFill:P0}, max: {maxFill:P0}), Latence totale: {TotalLatencyMs}ms";
+        }
+        
+        /// <summary>
+        /// Analyse les statistiques long terme et détermine une latence WASAPI optimale.
+        /// Appelé lors du Stop() pour préparer les paramètres du prochain Start().
+        /// </summary>
+        public void AnalyzeLongTermPerformance()
+        {
+            // Nécessite au moins 30 secondes de données pour une analyse fiable
+            var sessionDuration = (DateTime.Now - sessionStartTime).TotalSeconds;
+            if (sessionDuration < 30 || longTermBufferFills.Count < 100)
+            {
+                LogManager.LogDebug($"[AdaptiveBuffer] Analyse long terme: données insuffisantes ({sessionDuration:F0}s, {longTermBufferFills.Count} mesures)");
+                return;
+            }
+            
+            // Calculer statistiques
+            double avgFill = longTermBufferFills.Average();
+            double stdDevFill = CalculateStandardDeviation(longTermBufferFills);
+            double minFill = longTermBufferFills.Min();
+            double maxFill = longTermBufferFills.Max();
+            
+            double avgBufferedMs = longTermBufferedMs.Average();
+            double stdDevBufferedMs = CalculateStandardDeviation(longTermBufferedMs);
+            
+            // Compter les incidents critiques
+            int criticalEvents = longTermBufferFills.Count(f => f < CRITICAL_BUFFER_THRESHOLD);
+            int lowEvents = longTermBufferFills.Count(f => f < LOW_BUFFER_THRESHOLD);
+            int highEvents = longTermBufferFills.Count(f => f > HIGH_BUFFER_THRESHOLD);
+            
+            double criticalRate = (double)criticalEvents / longTermBufferFills.Count;
+            double lowRate = (double)lowEvents / longTermBufferFills.Count;
+            double highRate = (double)highEvents / longTermBufferFills.Count;
+            
+            LogManager.Log($"[AdaptiveBuffer] 📊 Analyse long terme ({sessionDuration:F0}s, {longTermBufferFills.Count} mesures):");
+            LogManager.Log($"[AdaptiveBuffer]    Remplissage moyen: {avgFill:P1} ± {stdDevFill:P1} (min: {minFill:P1}, max: {maxFill:P1})");
+            LogManager.Log($"[AdaptiveBuffer]    Buffer moyen: {avgBufferedMs:F1}ms ± {stdDevBufferedMs:F1}ms");
+            LogManager.Log($"[AdaptiveBuffer]    Incidents: {criticalRate:P1} critiques, {lowRate:P1} bas, {highRate:P1} élevés");
+            LogManager.Log($"[AdaptiveBuffer]    WASAPI actuel: {actualWasapiLatencyMs}ms");
+            
+            // Décision d'ajustement WASAPI
+            int suggestedWasapiMs = actualWasapiLatencyMs;
+            string recommendation = "";
+            
+            // Cas 1: Trop d'incidents critiques ou bas (>5%) => augmenter WASAPI
+            if (criticalRate > 0.05 || lowRate > 0.10)
+            {
+                int increaseAmount = 5;
+                if (criticalRate > 0.10) increaseAmount = 10; // Beaucoup de critiques => +10ms
+                
+                suggestedWasapiMs = Math.Min(MAX_WASAPI_MS, actualWasapiLatencyMs + increaseAmount);
+                recommendation = $"Augmentation recommandée: trop d'incidents ({criticalRate:P1} critiques, {lowRate:P1} bas)";
+            }
+            // Cas 2: Buffer constamment très haut (>70% du temps au-dessus de 80%) et stable => réduire WASAPI
+            else if (highRate > 0.70 && stdDevFill < 0.15)
+            {
+                int decreaseAmount = 3; // Réduction conservatrice
+                suggestedWasapiMs = Math.Max(MIN_WASAPI_MS, actualWasapiLatencyMs - decreaseAmount);
+                recommendation = $"Réduction possible: buffer élevé et stable ({highRate:P1} au-dessus de {HIGH_BUFFER_THRESHOLD:P0})";
+            }
+            // Cas 3: Performance optimale => garder ou ajustement mineur
+            else if (avgFill > 0.40 && avgFill < 0.70 && stdDevFill < 0.20)
+            {
+                // Parfait, possibilité de réduction très conservatrice si vraiment stable
+                if (stdDevFill < 0.10 && minFill > 0.30)
+                {
+                    suggestedWasapiMs = Math.Max(MIN_WASAPI_MS, actualWasapiLatencyMs - 2);
+                    recommendation = $"Performance excellente: réduction légère possible (écart-type: {stdDevFill:P1})";
+                }
+                else
+                {
+                    recommendation = "Performance optimale: aucun ajustement nécessaire";
+                }
+            }
+            // Cas 4: Variabilité élevée => augmenter légèrement pour stabiliser
+            else if (stdDevFill > 0.25)
+            {
+                suggestedWasapiMs = Math.Min(MAX_WASAPI_MS, actualWasapiLatencyMs + 3);
+                recommendation = $"Stabilisation recommandée: variabilité élevée (écart-type: {stdDevFill:P1})";
+            }
+            else
+            {
+                recommendation = "Performance acceptable: aucun ajustement majeur nécessaire";
+            }
+            
+            // Appliquer la recommandation
+            recommendedWasapiLatency = suggestedWasapiMs;
+            hasLongTermAnalysis = true;
+            
+            if (suggestedWasapiMs != actualWasapiLatencyMs)
+            {
+                LogManager.Log($"[AdaptiveBuffer] 💡 {recommendation}");
+                LogManager.Log($"[AdaptiveBuffer] 🎯 Recommandation: WASAPI {actualWasapiLatencyMs}ms → {suggestedWasapiMs}ms");
+                LogManager.Log($"[AdaptiveBuffer]    Cette latence sera appliquée au prochain démarrage");
+            }
+            else
+            {
+                LogManager.Log($"[AdaptiveBuffer] ✓ {recommendation}");
+            }
+        }
+        
+        /// <summary>
+        /// Applique la latence WASAPI recommandée si une analyse a été effectuée.
+        /// Appelé au Start() pour utiliser les paramètres optimisés.
+        /// </summary>
+        public void ApplyRecommendedWasapiLatency()
+        {
+            if (!hasLongTermAnalysis)
+                return;
+            
+            if (recommendedWasapiLatency != currentWasapiLatencyMs)
+            {
+                int oldWasapi = currentWasapiLatencyMs;
+                currentWasapiLatencyMs = recommendedWasapiLatency;
+                
+                LogManager.Log($"[AdaptiveBuffer] ✅ Application de la latence WASAPI recommandée: {oldWasapi}ms → {currentWasapiLatencyMs}ms");
+            }
+            
+            // Réinitialiser pour la prochaine session
+            hasLongTermAnalysis = false;
+            longTermBufferFills.Clear();
+            longTermBufferedMs.Clear();
+            sessionStartTime = DateTime.Now;
+        }
+        
+        /// <summary>
+        /// Calcule l'écart-type d'une liste de valeurs
+        /// </summary>
+        private double CalculateStandardDeviation(List<double> values)
+        {
+            if (values.Count < 2)
+                return 0.0;
+            
+            double avg = values.Average();
+            double sumOfSquares = values.Sum(v => Math.Pow(v - avg, 2));
+            return Math.Sqrt(sumOfSquares / (values.Count - 1));
         }
 
         /// <summary>
