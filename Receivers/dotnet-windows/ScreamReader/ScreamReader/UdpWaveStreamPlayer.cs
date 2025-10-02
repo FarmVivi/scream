@@ -8,6 +8,8 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 using NAudio.CoreAudioApi.Interfaces;
+using System.Collections.Generic;
+using System.Linq;
 
 namespace ScreamReader
 {
@@ -32,6 +34,9 @@ namespace ScreamReader
         protected int BufferDuration { get; set; } = -1; // -1 means auto-detect
         protected int WasapiLatency { get; set; } = -1; // -1 means auto-detect
         protected bool UseExclusiveMode { get; set; } = false;
+
+        // Adaptive buffer management
+        private AdaptiveBufferManager bufferManager;
         #endregion
 
         #region public properties
@@ -148,6 +153,15 @@ namespace ScreamReader
             // Create a new token for this run
             this.cancellationTokenSource = new CancellationTokenSource();
 
+            // Initialize adaptive buffer manager
+            this.bufferManager = new AdaptiveBufferManager(
+                this.BufferDuration, 
+                this.WasapiLatency, 
+                this.UseExclusiveMode,
+                this.BitWidth,
+                this.SampleRate
+            );
+
             // Run in background with high priority
             Task.Run(() =>
             {
@@ -169,7 +183,7 @@ namespace ScreamReader
                     byte currentChannelsMapLsb = (this.ChannelCount == 2) ? (byte)0x03 : (byte)0x01;
                     byte currentChannelsMapMsb = 0x00;
 
-                    var bufferDuration = GetOptimalBufferDuration();
+                    var bufferDuration = TimeSpan.FromMilliseconds(bufferManager.CurrentBufferDurationMs);
                     var rsws = new BufferedWaveProvider(
                         new WaveFormat(this.SampleRate, this.BitWidth, this.ChannelCount))
                     {
@@ -185,7 +199,8 @@ namespace ScreamReader
                     
                     int packetCount = 0;
                     var lastLogTime = DateTime.Now;
-                    var lowBufferCount = 0; // Count consecutive low buffer warnings
+                    var lastStatsLogTime = DateTime.Now;
+                    
                     // Start reading loop
                     while (!this.cancellationTokenSource.IsCancellationRequested)
                     {
@@ -193,6 +208,7 @@ namespace ScreamReader
                         {
                             byte[] data = this.udpClient.Receive(ref localEp);
                             packetCount++;
+                            
                             if (packetCount <= 5) // Log first 5 packets in detail
                             {
                                 LogManager.LogDebug($"[UdpWaveStreamPlayer] Received packet #{packetCount}: {data.Length} bytes from {localEp}");
@@ -228,12 +244,24 @@ namespace ScreamReader
                                 int newRate = ((currentRate >= 128) ? 44100 : 48000)
                                               * (currentRate % 128);
 
+                                LogManager.Log($"[UdpWaveStreamPlayer] Format change detected: {newRate}Hz, {currentWidth}bit, {currentChannels}ch");
+
                                 // Stop old output before re-initializing
                                 this.output?.Stop();
 
+                                // Recreate buffer manager with new format
+                                this.bufferManager = new AdaptiveBufferManager(
+                                    this.BufferDuration, 
+                                    this.WasapiLatency, 
+                                    this.UseExclusiveMode,
+                                    currentWidth,
+                                    newRate
+                                );
+
+                                bufferDuration = TimeSpan.FromMilliseconds(bufferManager.CurrentBufferDurationMs);
                                 rsws = new BufferedWaveProvider(new WaveFormat(newRate, currentWidth, currentChannels))
                                 {
-                                    BufferDuration = GetOptimalBufferDuration(), // Dynamically optimized based on system capabilities
+                                    BufferDuration = bufferDuration,
                                     DiscardOnBufferOverflow = true
                                 };
 
@@ -243,30 +271,34 @@ namespace ScreamReader
                             // Add samples (starting after the 5-byte header)
                             rsws.AddSamples(data, 5, data.Length - 5);
                             
-                            // Log buffer status every 50 packets to monitor for issues
-                            if (packetCount % 50 == 0)
+                            // Monitor buffer status and adapt every 25 packets (plus léger)
+                            if (packetCount % 25 == 0)
                             {
                                 var bufferedMs = rsws.BufferedDuration.TotalMilliseconds;
-                                var status = bufferedMs < 20 ? "LOW" : bufferedMs > 80 ? "HIGH" : "OK";
-                                LogManager.LogDebug($"[UdpWaveStreamPlayer] BufferedWaveProvider status: {rsws.BufferedBytes} bytes buffered, {bufferedMs:F1}ms buffered ({status})");
+                                var bufferCapacityMs = rsws.BufferDuration.TotalMilliseconds;
                                 
-                                // Adaptive buffer management
-                                if (bufferedMs < 15)
+                                // Enregistrer la mesure pour l'adaptation
+                                bufferManager.RecordMeasurement(bufferedMs, (int)bufferCapacityMs, packetCount);
+                                
+                                // Mettre à jour le buffer si nécessaire (uniquement en mode adaptatif)
+                                if (bufferManager.IsAdaptive)
                                 {
-                                    lowBufferCount++;
-                                    LogManager.Log($"[UdpWaveStreamPlayer] WARNING: Buffer critically low ({bufferedMs:F1}ms) - may cause crackling (warning #{lowBufferCount})");
-                                    
-                                    // If we have too many consecutive low buffer warnings, suggest increasing buffer
-                                    if (lowBufferCount >= 5)
+                                    var newBufferDuration = TimeSpan.FromMilliseconds(bufferManager.CurrentBufferDurationMs);
+                                    if (Math.Abs(newBufferDuration.TotalMilliseconds - rsws.BufferDuration.TotalMilliseconds) > 1)
                                     {
-                                        LogManager.Log($"[UdpWaveStreamPlayer] RECOMMENDATION: Consider using --buffer-duration 100 for better stability");
-                                        lowBufferCount = 0; // Reset counter
+                                        // Le buffer a été ajusté, il faut recréer le BufferedWaveProvider
+                                        // Note: on ne peut pas changer BufferDuration dynamiquement, 
+                                        // mais les ajustements WASAPI se feront au prochain changement de format
+                                        LogManager.LogDebug($"[UdpWaveStreamPlayer] Ajustement buffer prévu: {rsws.BufferDuration.TotalMilliseconds}ms -> {newBufferDuration.TotalMilliseconds}ms");
                                     }
                                 }
-                                else
-                                {
-                                    lowBufferCount = 0; // Reset counter when buffer is healthy
-                                }
+                            }
+                            
+                            // Log statistiques périodiques (toutes les 10 secondes)
+                            if ((DateTime.Now - lastStatsLogTime).TotalSeconds >= 10)
+                            {
+                                LogManager.Log($"[UdpWaveStreamPlayer] Stats: {bufferManager.GetStatistics()}");
+                                lastStatsLogTime = DateTime.Now;
                             }
                         }
                         catch (SocketException ex)
@@ -284,6 +316,8 @@ namespace ScreamReader
                         }
                         catch (Exception ex)
                         {
+                            LogManager.Log($"[UdpWaveStreamPlayer] Error: {ex.Message}");
+                            LogManager.Log($"[UdpWaveStreamPlayer] Stack trace: {ex.StackTrace}");
                             MessageBox.Show(ex.StackTrace, ex.Message);
                         }
                     }
@@ -348,58 +382,7 @@ namespace ScreamReader
 
         #endregion
 
-        /// <summary>
-        /// Gets optimal buffer duration based on user settings or system capabilities.
-        /// </summary>
-        private TimeSpan GetOptimalBufferDuration()
-        {
-            // Use user-specified value if provided
-            if (this.BufferDuration > 0)
-            {
-                LogManager.Log($"[UdpWaveStreamPlayer] Using user-specified buffer duration: {this.BufferDuration}ms");
-                return TimeSpan.FromMilliseconds(this.BufferDuration);
-            }
 
-            // Auto-detect based on system capabilities
-            try
-            {
-                using (var mmDeviceEnum = new MMDeviceEnumerator())
-                {
-                    var device = mmDeviceEnum.GetDefaultAudioEndpoint(DataFlow.Render, Role.Multimedia);
-                    
-                    // Check if device supports low latency
-                    var audioClient = device.AudioClient;
-                    var format = audioClient.MixFormat;
-                    
-                    // Use much larger buffers for complete stability with high packet rates
-                    if (format.SampleRate >= 48000)
-                    {
-                        // For 16bit audio with high packet rates, use much larger buffers
-                        if (this.BitWidth <= 16)
-                        {
-                            LogManager.Log("[UdpWaveStreamPlayer] Auto-detected: Using 150ms buffer for 16bit/48kHz (ultra-stable)");
-                            return TimeSpan.FromMilliseconds(150);
-                        }
-                        else
-                        {
-                            LogManager.Log("[UdpWaveStreamPlayer] Auto-detected: Using 200ms buffer for high-bit/48kHz");
-                            return TimeSpan.FromMilliseconds(200);
-                        }
-                    }
-                    else
-                    {
-                        LogManager.Log("[UdpWaveStreamPlayer] Auto-detected: Using 200ms buffer for standard device");
-                        return TimeSpan.FromMilliseconds(200);
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                LogManager.Log($"[UdpWaveStreamPlayer] Failed to detect optimal buffer duration: {ex.Message}");
-                LogManager.Log("[UdpWaveStreamPlayer] Using safe fallback: 50ms buffer");
-                return TimeSpan.FromMilliseconds(50); // Safe fallback for stability
-            }
-        }
 
         /// <summary>
         /// Gets the current system volume level for the default audio device.
@@ -423,6 +406,7 @@ namespace ScreamReader
 
         /// <summary>
         /// Sets up the WasapiOut device with the given wave provider, disposing the old one if present.
+        /// Uses adaptive latency from the buffer manager for optimal performance.
         /// </summary>
         private void InitializeOutputDevice(IWaveProvider waveProvider)
         {
@@ -436,82 +420,54 @@ namespace ScreamReader
             }
 
             // Create a WasapiOut associated with the *current* default device
-            // so that each time the default device changes, we can switch.
             using (var mmDeviceEnum = new MMDeviceEnumerator())
             {
                 var device = mmDeviceEnum.GetDefaultAudioEndpoint(DataFlow.Render, Role.Multimedia);
                 
                 // Determine share mode
                 var shareMode = this.UseExclusiveMode ? AudioClientShareMode.Exclusive : AudioClientShareMode.Shared;
-                LogManager.Log($"[UdpWaveStreamPlayer] UseExclusiveMode = {this.UseExclusiveMode}, using {shareMode} mode");
                 
-                // Use user-specified latency if provided, otherwise auto-detect
-                if (this.WasapiLatency > 0)
+                // Get adaptive latency from buffer manager
+                int targetLatency = bufferManager?.CurrentWasapiLatencyMs ?? 20;
+                
+                // Try to initialize with adaptive latency, with graceful fallback
+                bool success = false;
+                int[] latencyOptions = new int[] { 
+                    targetLatency,                  // Latence optimale adaptative
+                    targetLatency + 10,             // Fallback +10ms
+                    targetLatency + 20,             // Fallback +20ms
+                    50,                             // Fallback sûr
+                    100                             // Dernière chance
+                };
+                
+                foreach (int latency in latencyOptions)
                 {
                     try
                     {
-                        this.output = new WasapiOut(device, shareMode, false, this.WasapiLatency);
-                        LogManager.Log($"[UdpWaveStreamPlayer] Using user-specified {shareMode} mode with {this.WasapiLatency}ms latency");
+                        this.output = new WasapiOut(device, shareMode, false, latency);
+                        LogManager.Log($"[UdpWaveStreamPlayer] ✓ Initialized {shareMode} mode with {latency}ms WASAPI latency");
+                        success = true;
+                        break;
                     }
                     catch (Exception ex)
                     {
-                        LogManager.Log($"[UdpWaveStreamPlayer] Failed with user-specified latency: {ex.Message}");
-                        LogManager.Log("[UdpWaveStreamPlayer] Falling back to auto-detection...");
-                        InitializeWithAutoDetection(device, shareMode);
+                        LogManager.LogDebug($"[UdpWaveStreamPlayer] Failed with {latency}ms: {ex.Message}");
+                        this.output?.Dispose();
+                        this.output = null;
                     }
                 }
-                else
+                
+                if (!success)
                 {
-                    InitializeWithAutoDetection(device, shareMode);
+                    throw new InvalidOperationException($"Failed to initialize WasapiOut with {shareMode} mode at any latency");
                 }
             }
 
             this.currentWaveProvider = waveProvider;
-            LogManager.Log("[UdpWaveStreamPlayer] Initializing WasapiOut with wave provider...");
             this.output.Init(this.currentWaveProvider);
-            LogManager.Log("[UdpWaveStreamPlayer] Setting volume...");
             this.output.Volume = (float)this.volume / 100f;
-            LogManager.Log("[UdpWaveStreamPlayer] Starting audio playback...");
             this.output.Play();
-            LogManager.Log("[UdpWaveStreamPlayer] Audio playback started successfully");
-        }
-
-        /// <summary>
-        /// Initializes WasapiOut with auto-detected optimal latency settings.
-        /// </summary>
-        private void InitializeWithAutoDetection(MMDevice device, AudioClientShareMode shareMode)
-        {
-            // Try progressively higher latencies until one works
-            int[] latencyOptions = shareMode == AudioClientShareMode.Exclusive 
-                ? new int[] { 100, 200, 300, 400 }  // Exclusive mode with very high latencies for stability
-                : new int[] { 200, 300, 400, 500 }; // Shared mode with very high latencies for stability
-            
-            bool success = false;
-            
-            foreach (int latency in latencyOptions)
-            {
-                try
-                {
-                    this.output = new WasapiOut(device, shareMode, false, latency);
-                    LogManager.Log($"[UdpWaveStreamPlayer] Auto-detected: Using {shareMode} mode with {latency}ms latency");
-                    success = true;
-                    break;
-                }
-                catch (Exception ex)
-                {
-                    LogManager.Log($"[UdpWaveStreamPlayer] Failed to initialize with {latency}ms latency: {ex.Message}");
-                    if (this.output != null)
-                    {
-                        this.output.Dispose();
-                        this.output = null;
-                    }
-                }
-            }
-            
-            if (!success)
-            {
-                throw new InvalidOperationException($"Failed to initialize WasapiOut with {shareMode} mode and any latency setting");
-            }
+            LogManager.Log($"[UdpWaveStreamPlayer] ✓ Audio playback started (Total latency: ~{bufferManager?.TotalLatencyMs ?? 0}ms)");
         }
 
         #region dispose

@@ -203,30 +203,47 @@ namespace ScreamReader
 
         private static void ShowHelp()
         {
+            Console.WriteLine("ScreamReader - Low-Latency Network Audio Receiver");
+            Console.WriteLine("==================================================");
+            Console.WriteLine("");
             Console.WriteLine("Usage:");
-            Console.WriteLine("\t--ip <IP_address>    : Specify the IP address (unicast or multicast) to listen on (default 239.255.77.77)");
-            Console.WriteLine("\t--port <port_number> : Specify the port to listen on (default 4010)");
-            Console.WriteLine("\t--unicast            : Use IP address in unicast");
-            Console.WriteLine("\t--multicast          : Use IP address in multicast (default)");
-            Console.WriteLine("\t--bit-width <val>    : Specify bit depth (e.g., 16, 24, 32) (default 16)");
-            Console.WriteLine("\t--rate <val>         : Specify sample rate (e.g., 44100, 48000) (default 44100)");
-            Console.WriteLine("\t--channels <val>     : Specify number of channels (1 = mono, 2 = stereo, etc.) (default 2)");
-            Console.WriteLine("\t--buffer-duration <ms> : Buffer duration in milliseconds (default: auto-detect)");
-            Console.WriteLine("\t--wasapi-latency <ms>  : WasapiOut latency in milliseconds (default: auto-detect)");
-            Console.WriteLine("\t--exclusive-mode    : Use exclusive audio mode (lower latency, no mixer visibility)");
-            Console.WriteLine("\t--shared-mode       : Use shared audio mode (default, appears in mixer)");
-            Console.WriteLine("\t--help or -h         : Show this help");
+            Console.WriteLine("\t--ip <IP_address>      : Specify the IP address (unicast or multicast) to listen on (default 239.255.77.77)");
+            Console.WriteLine("\t--port <port_number>   : Specify the port to listen on (default 4010)");
+            Console.WriteLine("\t--unicast              : Use IP address in unicast");
+            Console.WriteLine("\t--multicast            : Use IP address in multicast (default)");
+            Console.WriteLine("\t--bit-width <val>      : Specify bit depth (e.g., 16, 24, 32) (default 16)");
+            Console.WriteLine("\t--rate <val>           : Specify sample rate (e.g., 44100, 48000) (default 44100)");
+            Console.WriteLine("\t--channels <val>       : Specify number of channels (1 = mono, 2 = stereo, etc.) (default 2)");
+            Console.WriteLine("\t--buffer-duration <ms> : Network buffer duration in milliseconds (default: adaptive ~30ms)");
+            Console.WriteLine("\t--wasapi-latency <ms>  : Audio driver latency in milliseconds (default: adaptive ~20ms)");
+            Console.WriteLine("\t--exclusive-mode       : Use exclusive audio mode (lowest latency, no mixer visibility)");
+            Console.WriteLine("\t--shared-mode          : Use shared audio mode (default, appears in mixer)");
+            Console.WriteLine("\t--help or -h           : Show this help");
             Console.WriteLine("");
-            Console.WriteLine("Audio Quality Recommendations:");
-            Console.WriteLine("\tFor best quality (no crackling): --shared-mode --buffer-duration 200 --wasapi-latency 400");
-            Console.WriteLine("\tFor balanced quality/latency: --shared-mode --buffer-duration 150 --wasapi-latency 300");
-            Console.WriteLine("\tFor low latency (may crackle): --shared-mode --buffer-duration 100 --wasapi-latency 200");
-            Console.WriteLine("\tFor ultra-low latency: --exclusive-mode --buffer-duration 50 --wasapi-latency 100");
+            Console.WriteLine("🎯 NEW: Adaptive Buffer Management (Recommended)");
+            Console.WriteLine("=================================================");
+            Console.WriteLine("Par défaut, ScreamReader ajuste automatiquement les buffers pour:");
+            Console.WriteLine("  ✓ Minimiser la latence (~50ms total)");
+            Console.WriteLine("  ✓ Éviter les craquellements");
+            Console.WriteLine("  ✓ S'adapter à votre système en temps réel");
             Console.WriteLine("");
-            Console.WriteLine("Note: Higher values = better quality, lower crackling");
-            Console.WriteLine("      Lower values = lower latency, may crackle");
-            Console.WriteLine("      --shared-mode ensures the application appears in Windows audio mixer");
-            Console.WriteLine("      If you see 'WARNING: Buffer critically low', increase --buffer-duration");
+            Console.WriteLine("Laissez les valeurs par défaut pour bénéficier de l'adaptation intelligente !");
+            Console.WriteLine("");
+            Console.WriteLine("Presets manuels (désactive l'adaptation automatique):");
+            Console.WriteLine("-------------------------------------------------------");
+            Console.WriteLine("\tMode Gaming (latence ultra-basse, ~30ms):");
+            Console.WriteLine("\t  --shared-mode --buffer-duration 20 --wasapi-latency 10");
+            Console.WriteLine("");
+            Console.WriteLine("\tMode Équilibré (latence basse, ~50ms):");
+            Console.WriteLine("\t  --shared-mode --buffer-duration 30 --wasapi-latency 20");
+            Console.WriteLine("");
+            Console.WriteLine("\tMode Stabilité (pour systèmes lents, ~100ms):");
+            Console.WriteLine("\t  --shared-mode --buffer-duration 60 --wasapi-latency 40");
+            Console.WriteLine("");
+            Console.WriteLine("\tMode Exclusif (latence minimale, pas dans le mixer):");
+            Console.WriteLine("\t  --exclusive-mode --buffer-duration 15 --wasapi-latency 10");
+            Console.WriteLine("");
+            Console.WriteLine("💡 Astuce: Surveillez les logs pour voir l'adaptation en action!");
         }
 
         [STAThread]
