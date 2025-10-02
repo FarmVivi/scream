@@ -94,7 +94,8 @@ namespace ScreamReader
             this.ClientSize = new System.Drawing.Size(1400, 900);
             this.MinimumSize = new System.Drawing.Size(1200, 700);
             this.Name = "AudioReceiverWindow";
-            this.Text = "ScreamReader - Récepteur Audio Réseau";
+            this.Text = "ScreamReader";
+            this.Icon = Properties.Resources.speaker_ico;
             this.StartPosition = System.Windows.Forms.FormStartPosition.CenterScreen;
             this.BackColor = System.Drawing.Color.FromArgb(240, 240, 240);
             
