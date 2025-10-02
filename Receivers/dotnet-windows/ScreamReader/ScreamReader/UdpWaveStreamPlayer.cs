@@ -108,6 +108,8 @@ namespace ScreamReader
             this.BitWidth = bitWidth;
             this.SampleRate = rate;
             this.ChannelCount = channels;
+            // Ensure Shared mode by default
+            this.UseExclusiveMode = false;
         }
 
         /// <summary>
@@ -365,6 +367,7 @@ namespace ScreamReader
                 
                 // Determine share mode
                 var shareMode = this.UseExclusiveMode ? AudioClientShareMode.Exclusive : AudioClientShareMode.Shared;
+                Debug.WriteLine($"[UdpWaveStreamPlayer] UseExclusiveMode = {this.UseExclusiveMode}, using {shareMode} mode");
                 
                 // Use user-specified latency if provided, otherwise auto-detect
                 if (this.WasapiLatency > 0)
@@ -396,7 +399,7 @@ namespace ScreamReader
             // Try progressively higher latencies until one works
             int[] latencyOptions = shareMode == AudioClientShareMode.Exclusive 
                 ? new int[] { 10, 20, 30, 50 }  // Exclusive mode can handle lower latencies
-                : new int[] { 50, 100, 150, 200 }; // Shared mode needs higher latencies for stability
+                : new int[] { 20, 30, 50, 100 }; // Shared mode with reasonable latencies for mixer visibility
             
             bool success = false;
             

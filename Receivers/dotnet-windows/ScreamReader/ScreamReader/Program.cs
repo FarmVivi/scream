@@ -216,14 +216,25 @@ namespace ScreamReader
             Console.WriteLine("\t--help or -h         : Show this help");
             Console.WriteLine("");
             Console.WriteLine("Audio Quality Recommendations:");
-            Console.WriteLine("\tFor best quality (no crackling): --buffer-duration 50 --wasapi-latency 100");
-            Console.WriteLine("\tFor low latency: --buffer-duration 10 --wasapi-latency 20");
+            Console.WriteLine("\tFor best quality (no crackling): --shared-mode --buffer-duration 50 --wasapi-latency 100");
+            Console.WriteLine("\tFor low latency: --shared-mode --buffer-duration 10 --wasapi-latency 20");
             Console.WriteLine("\tFor ultra-low latency: --exclusive-mode --buffer-duration 5 --wasapi-latency 10");
+            Console.WriteLine("");
+            Console.WriteLine("Note: --shared-mode ensures the application appears in Windows audio mixer");
+            Console.WriteLine("      --exclusive-mode provides lower latency but hides from mixer");
         }
 
         [STAThread]
         static void startScreamReader(int bitWidth, int rate, int channels, int port, IPAddress ipAddress, bool multicast, int bufferDuration, int wasapiLatency, bool useExclusiveMode)
         {
+            // Display startup information
+            Console.WriteLine("ScreamReader starting...");
+            Console.WriteLine($"Audio mode: {(useExclusiveMode ? "Exclusive" : "Shared")}");
+            Console.WriteLine($"Buffer duration: {(bufferDuration > 0 ? bufferDuration + "ms" : "auto-detect")}");
+            Console.WriteLine($"WasapiOut latency: {(wasapiLatency > 0 ? wasapiLatency + "ms" : "auto-detect")}");
+            Console.WriteLine($"Mixer visibility: {(useExclusiveMode ? "Hidden" : "Visible")}");
+            Console.WriteLine("");
+
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
             Application.Run(new ScreamReaderTray(bitWidth, rate, channels, port, ipAddress, multicast, bufferDuration, wasapiLatency, useExclusiveMode));
