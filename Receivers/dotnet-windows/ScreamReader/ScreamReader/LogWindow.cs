@@ -14,10 +14,11 @@ namespace ScreamReader
         public LogWindow()
         {
             InitializeComponent();
+            SetupControls();
             LoadLogs();
         }
 
-        private void InitializeComponent()
+        private void SetupControls()
         {
             this.Text = "ScreamReader Logs";
             this.Size = new Size(800, 600);
