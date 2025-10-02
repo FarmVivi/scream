@@ -7,9 +7,9 @@ namespace ScreamReader
     public partial class LogWindow : Form
     {
         private TextBox logTextBox;
-        private Button clearButton;
-        private Button saveButton;
-        private Button refreshButton;
+        private Button playPauseButton;
+        private Timer autoRefreshTimer;
+        private bool isAutoRefreshEnabled = true;
 
         public LogWindow()
         {
@@ -42,34 +42,24 @@ namespace ScreamReader
                 Height = 40
             };
 
-            // Create buttons
-            refreshButton = new Button
+            // Create play/pause button
+            playPauseButton = new Button
             {
-                Text = "Refresh",
+                Text = "Pause",
                 Size = new Size(80, 30),
                 Margin = new Padding(5)
             };
-            refreshButton.Click += RefreshButton_Click;
+            playPauseButton.Click += PlayPauseButton_Click;
 
-            clearButton = new Button
+            buttonPanel.Controls.Add(playPauseButton);
+
+            // Create auto-refresh timer
+            autoRefreshTimer = new Timer
             {
-                Text = "Clear",
-                Size = new Size(80, 30),
-                Margin = new Padding(5)
+                Interval = 1000 // Refresh every second
             };
-            clearButton.Click += ClearButton_Click;
-
-            saveButton = new Button
-            {
-                Text = "Save Logs",
-                Size = new Size(100, 30),
-                Margin = new Padding(5)
-            };
-            saveButton.Click += SaveButton_Click;
-
-            buttonPanel.Controls.Add(refreshButton);
-            buttonPanel.Controls.Add(clearButton);
-            buttonPanel.Controls.Add(saveButton);
+            autoRefreshTimer.Tick += AutoRefreshTimer_Tick;
+            autoRefreshTimer.Start();
 
             // Create log text box
             logTextBox = new TextBox
@@ -102,48 +92,50 @@ namespace ScreamReader
                     e.Cancel = true;
                     this.Hide();
                 }
+                else
+                {
+                    // Stop timer when form is actually closing
+                    autoRefreshTimer?.Stop();
+                    autoRefreshTimer?.Dispose();
+                }
             };
         }
 
-        private void RefreshButton_Click(object sender, EventArgs e)
+        private void PlayPauseButton_Click(object sender, EventArgs e)
         {
-            LoadLogs();
+            isAutoRefreshEnabled = !isAutoRefreshEnabled;
+            
+            if (isAutoRefreshEnabled)
+            {
+                playPauseButton.Text = "Pause";
+                autoRefreshTimer.Start();
+                // Refresh immediately when resuming
+                LoadLogs();
+            }
+            else
+            {
+                playPauseButton.Text = "Play";
+                autoRefreshTimer.Stop();
+            }
         }
 
-        private void ClearButton_Click(object sender, EventArgs e)
+        private void AutoRefreshTimer_Tick(object sender, EventArgs e)
         {
-            LogManager.ClearLogs();
-            LoadLogs();
-        }
-
-        private void SaveButton_Click(object sender, EventArgs e)
-        {
-            var saveDialog = new SaveFileDialog
+            if (isAutoRefreshEnabled)
             {
-                Filter = "Text files (*.txt)|*.txt|All files (*.*)|*.*",
-                DefaultExt = "txt",
-                FileName = $"ScreamReader_Logs_{DateTime.Now:yyyyMMdd_HHmmss}.txt"
-            };
-
-            if (saveDialog.ShowDialog() == DialogResult.OK)
-            {
-                try
-                {
-                    System.IO.File.WriteAllText(saveDialog.FileName, logTextBox.Text);
-                    MessageBox.Show($"Logs saved to: {saveDialog.FileName}", "Success", MessageBoxButtons.OK, MessageBoxIcon.Information);
-                }
-                catch (Exception ex)
-                {
-                    MessageBox.Show($"Failed to save logs: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                }
+                LoadLogs();
             }
         }
 
         public void LoadLogs()
         {
-            logTextBox.Text = LogManager.GetAllLogs();
-            logTextBox.SelectionStart = logTextBox.Text.Length;
-            logTextBox.ScrollToCaret();
+            string newLogs = LogManager.GetAllLogs();
+            if (logTextBox.Text != newLogs)
+            {
+                logTextBox.Text = newLogs;
+                logTextBox.SelectionStart = logTextBox.Text.Length;
+                logTextBox.ScrollToCaret();
+            }
         }
 
         public void AddLog(string logEntry)
@@ -154,9 +146,13 @@ namespace ScreamReader
                 return;
             }
 
-            logTextBox.AppendText(logEntry + Environment.NewLine);
-            logTextBox.SelectionStart = logTextBox.Text.Length;
-            logTextBox.ScrollToCaret();
+            // Only add to text box if auto-refresh is enabled
+            if (isAutoRefreshEnabled)
+            {
+                logTextBox.AppendText(logEntry + Environment.NewLine);
+                logTextBox.SelectionStart = logTextBox.Text.Length;
+                logTextBox.ScrollToCaret();
+            }
         }
 
         public void ClearLogs()
