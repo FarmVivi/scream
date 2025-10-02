@@ -230,12 +230,11 @@ namespace ScreamReader
         static void startScreamReader(int bitWidth, int rate, int channels, int port, IPAddress ipAddress, bool multicast, int bufferDuration, int wasapiLatency, bool useExclusiveMode)
         {
             // Display startup information
-            Console.WriteLine("ScreamReader starting...");
-            Console.WriteLine($"Audio mode: {(useExclusiveMode ? "Exclusive" : "Shared")}");
-            Console.WriteLine($"Buffer duration: {(bufferDuration > 0 ? bufferDuration + "ms" : "auto-detect")}");
-            Console.WriteLine($"WasapiOut latency: {(wasapiLatency > 0 ? wasapiLatency + "ms" : "auto-detect")}");
-            Console.WriteLine($"Mixer visibility: {(useExclusiveMode ? "Hidden" : "Visible")}");
-            Console.WriteLine("");
+            LogManager.Log("ScreamReader starting...");
+            LogManager.Log($"Audio mode: {(useExclusiveMode ? "Exclusive" : "Shared")}");
+            LogManager.Log($"Buffer duration: {(bufferDuration > 0 ? bufferDuration + "ms" : "auto-detect")}");
+            LogManager.Log($"WasapiOut latency: {(wasapiLatency > 0 ? wasapiLatency + "ms" : "auto-detect")}");
+            LogManager.Log($"Mixer visibility: {(useExclusiveMode ? "Hidden" : "Visible")}");
 
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
@@ -283,7 +282,25 @@ namespace ScreamReader
                 this.mainForm.ShowDialog(this);
             };
 
+            trayMenu.MenuItems.Add("-"); // Separator
+            trayMenu.MenuItems.Add("View Logs", this.OnViewLogs);
+            trayMenu.MenuItems.Add("Clear Logs", this.OnClearLogs);
+            trayMenu.MenuItems.Add("-"); // Separator
             trayMenu.MenuItems.Add("Exit", this.OnExit);
+        }
+
+        private void OnViewLogs(object sender, EventArgs e)
+        {
+            LogManager.ShowLogWindow();
+        }
+
+        private void OnClearLogs(object sender, EventArgs e)
+        {
+            var result = MessageBox.Show("Are you sure you want to clear all logs?", "Clear Logs", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
+            if (result == DialogResult.Yes)
+            {
+                LogManager.ClearLogs();
+            }
         }
 
         private void OnExit(object sender, EventArgs e)
