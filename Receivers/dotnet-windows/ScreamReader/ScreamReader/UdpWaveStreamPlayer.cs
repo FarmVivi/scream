@@ -144,7 +144,7 @@ namespace ScreamReader
                     var rsws = new BufferedWaveProvider(
                         new WaveFormat(this.SampleRate, this.BitWidth, this.ChannelCount))
                     {
-                        BufferDuration = TimeSpan.FromMilliseconds(10), // Reduced to 10ms for minimal latency
+                        BufferDuration = GetOptimalBufferDuration(), // Dynamically optimized based on system capabilities
                         DiscardOnBufferOverflow = true
                     };
 
@@ -181,7 +181,7 @@ namespace ScreamReader
 
                                 rsws = new BufferedWaveProvider(new WaveFormat(newRate, currentWidth, currentChannels))
                                 {
-                                    BufferDuration = TimeSpan.FromMilliseconds(10), // Reduced to 10ms for minimal latency
+                                    BufferDuration = GetOptimalBufferDuration(), // Dynamically optimized based on system capabilities
                                     DiscardOnBufferOverflow = true
                                 };
 
@@ -263,6 +263,39 @@ namespace ScreamReader
         #endregion
 
         /// <summary>
+        /// Detects optimal buffer duration based on system capabilities.
+        /// </summary>
+        private TimeSpan GetOptimalBufferDuration()
+        {
+            try
+            {
+                using (var mmDeviceEnum = new MMDeviceEnumerator())
+                {
+                    var device = mmDeviceEnum.GetDefaultAudioEndpoint(DataFlow.Render, Role.Multimedia);
+                    
+                    // Check if device supports low latency
+                    var audioClient = device.AudioClient;
+                    var format = audioClient.MixFormat;
+                    
+                    // For high sample rates (48kHz+), we can use smaller buffers
+                    if (format.SampleRate >= 48000)
+                    {
+                        return TimeSpan.FromMilliseconds(5); // Ultra-low latency for high-quality devices
+                    }
+                    else
+                    {
+                        return TimeSpan.FromMilliseconds(10); // Slightly higher for lower sample rates
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"[UdpWaveStreamPlayer] Failed to detect optimal buffer duration: {ex.Message}");
+                return TimeSpan.FromMilliseconds(10); // Safe fallback
+            }
+        }
+
+        /// <summary>
         /// Gets the current system volume level for the default audio device.
         /// </summary>
         private int GetCurrentSystemVolume()
@@ -302,10 +335,34 @@ namespace ScreamReader
             {
                 var device = mmDeviceEnum.GetDefaultAudioEndpoint(DataFlow.Render, Role.Multimedia);
                 
-                // Use Shared mode to ensure the application appears in Windows audio mixer
-                // with optimized latency settings
-                this.output = new WasapiOut(device, AudioClientShareMode.Shared, false, 20);
-                Debug.WriteLine("[UdpWaveStreamPlayer] Using Shared mode for Windows mixer compatibility with 20ms latency");
+                // Try progressively higher latencies until one works
+                int[] latencyOptions = { 10, 15, 20, 30 }; // Start with ultra-low latency
+                bool success = false;
+                
+                foreach (int latency in latencyOptions)
+                {
+                    try
+                    {
+                        this.output = new WasapiOut(device, AudioClientShareMode.Shared, false, latency);
+                        Debug.WriteLine($"[UdpWaveStreamPlayer] Using Shared mode with {latency}ms latency");
+                        success = true;
+                        break;
+                    }
+                    catch (Exception ex)
+                    {
+                        Debug.WriteLine($"[UdpWaveStreamPlayer] Failed to initialize with {latency}ms latency: {ex.Message}");
+                        if (this.output != null)
+                        {
+                            this.output.Dispose();
+                            this.output = null;
+                        }
+                    }
+                }
+                
+                if (!success)
+                {
+                    throw new InvalidOperationException("Failed to initialize WasapiOut with any latency setting");
+                }
             }
 
             this.currentWaveProvider = waveProvider;
