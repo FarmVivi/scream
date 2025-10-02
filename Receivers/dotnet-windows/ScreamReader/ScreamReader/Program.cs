@@ -219,13 +219,14 @@ namespace ScreamReader
             Console.WriteLine("");
             Console.WriteLine("Audio Quality Recommendations:");
             Console.WriteLine("\tFor best quality (no crackling): --shared-mode --buffer-duration 100 --wasapi-latency 200");
-            Console.WriteLine("\tFor balanced quality/latency: --shared-mode --buffer-duration 50 --wasapi-latency 100");
-            Console.WriteLine("\tFor low latency (may crackle): --shared-mode --buffer-duration 20 --wasapi-latency 50");
-            Console.WriteLine("\tFor ultra-low latency: --exclusive-mode --buffer-duration 10 --wasapi-latency 20");
+            Console.WriteLine("\tFor balanced quality/latency: --shared-mode --buffer-duration 75 --wasapi-latency 150");
+            Console.WriteLine("\tFor low latency (may crackle): --shared-mode --buffer-duration 50 --wasapi-latency 100");
+            Console.WriteLine("\tFor ultra-low latency: --exclusive-mode --buffer-duration 25 --wasapi-latency 50");
             Console.WriteLine("");
             Console.WriteLine("Note: Higher values = better quality, lower crackling");
             Console.WriteLine("      Lower values = lower latency, may crackle");
             Console.WriteLine("      --shared-mode ensures the application appears in Windows audio mixer");
+            Console.WriteLine("      If you see 'WARNING: Buffer critically low', increase --buffer-duration");
         }
 
         [STAThread]

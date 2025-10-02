@@ -185,6 +185,7 @@ namespace ScreamReader
                     
                     int packetCount = 0;
                     var lastLogTime = DateTime.Now;
+                    var lowBufferCount = 0; // Count consecutive low buffer warnings
                     // Start reading loop
                     while (!this.cancellationTokenSource.IsCancellationRequested)
                     {
@@ -249,10 +250,22 @@ namespace ScreamReader
                                 var status = bufferedMs < 20 ? "LOW" : bufferedMs > 80 ? "HIGH" : "OK";
                                 LogManager.Log($"[UdpWaveStreamPlayer] Buffer status: {rsws.BufferedBytes} bytes buffered, {bufferedMs:F1}ms buffered ({status})");
                                 
-                                // Warn if buffer is getting too low
+                                // Adaptive buffer management
                                 if (bufferedMs < 15)
                                 {
-                                    LogManager.Log($"[UdpWaveStreamPlayer] WARNING: Buffer critically low ({bufferedMs:F1}ms) - may cause crackling");
+                                    lowBufferCount++;
+                                    LogManager.Log($"[UdpWaveStreamPlayer] WARNING: Buffer critically low ({bufferedMs:F1}ms) - may cause crackling (warning #{lowBufferCount})");
+                                    
+                                    // If we have too many consecutive low buffer warnings, suggest increasing buffer
+                                    if (lowBufferCount >= 5)
+                                    {
+                                        LogManager.Log($"[UdpWaveStreamPlayer] RECOMMENDATION: Consider using --buffer-duration 100 for better stability");
+                                        lowBufferCount = 0; // Reset counter
+                                    }
+                                }
+                                else
+                                {
+                                    lowBufferCount = 0; // Reset counter when buffer is healthy
                                 }
                             }
                         }
@@ -359,13 +372,14 @@ namespace ScreamReader
                     var format = audioClient.MixFormat;
                     
                     // Optimize buffer size based on bit depth and sample rate
+                    // Use larger buffers for stability with high packet rates
                     if (format.SampleRate >= 48000)
                     {
-                        // For 16bit audio, we can use smaller buffers
+                        // For 16bit audio with high packet rates, use larger buffers
                         if (this.BitWidth <= 16)
                         {
-                            LogManager.Log("[UdpWaveStreamPlayer] Auto-detected: Using 50ms buffer for 16bit/48kHz (optimized)");
-                            return TimeSpan.FromMilliseconds(50);
+                            LogManager.Log("[UdpWaveStreamPlayer] Auto-detected: Using 75ms buffer for 16bit/48kHz (stable)");
+                            return TimeSpan.FromMilliseconds(75);
                         }
                         else
                         {
@@ -375,8 +389,8 @@ namespace ScreamReader
                     }
                     else
                     {
-                        LogManager.Log("[UdpWaveStreamPlayer] Auto-detected: Using 75ms buffer for standard device");
-                        return TimeSpan.FromMilliseconds(75);
+                        LogManager.Log("[UdpWaveStreamPlayer] Auto-detected: Using 100ms buffer for standard device");
+                        return TimeSpan.FromMilliseconds(100);
                     }
                 }
             }
@@ -470,8 +484,8 @@ namespace ScreamReader
         {
             // Try progressively higher latencies until one works
             int[] latencyOptions = shareMode == AudioClientShareMode.Exclusive 
-                ? new int[] { 20, 50, 100, 200 }  // Exclusive mode with higher latencies for stability
-                : new int[] { 50, 100, 150, 200 }; // Shared mode with optimized latencies for 16bit audio
+                ? new int[] { 50, 100, 150, 200 }  // Exclusive mode with higher latencies for stability
+                : new int[] { 100, 150, 200, 300 }; // Shared mode with higher latencies for stability
             
             bool success = false;
             
