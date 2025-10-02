@@ -91,8 +91,8 @@ namespace ScreamReader
             // Form properties
             this.AutoScaleDimensions = new System.Drawing.SizeF(8F, 16F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;  // Font-based scaling (standard)
-            this.ClientSize = new System.Drawing.Size(1400, 900);
-            this.MinimumSize = new System.Drawing.Size(1200, 700);
+            this.ClientSize = new System.Drawing.Size(1400, 950);  // Augmenté de 900 à 950 pour plus d'espace
+            this.MinimumSize = new System.Drawing.Size(1200, 750);  // Augmenté de 700 à 750
             this.Name = "AudioReceiverWindow";
             this.Text = "ScreamReader";
             this.Icon = Properties.Resources.speaker_ico;
@@ -278,44 +278,46 @@ namespace ScreamReader
 
             // Configuration group (left side)
             grpConfig.Location = new System.Drawing.Point(margin, y);
-            grpConfig.Size = new System.Drawing.Size(350, 350);
+            grpConfig.Size = new System.Drawing.Size(350, 380);  // Augmenté de 350 à 380 pour plus d'espace
             grpConfig.Anchor = System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Left;  // Fixe en haut à gauche
             
             int gy = 25;
+            int lineHeight = (int)(30 * (this.AutoScaleDimensions.Height / 16F));  // Ajuste en fonction du DPI
+            
             lblIpAddress.Location = new System.Drawing.Point(10, gy);
             txtIpAddress.Location = new System.Drawing.Point(100, gy);
-            gy += 30;
+            gy += lineHeight;
             
             lblPort.Location = new System.Drawing.Point(10, gy);
             numPort.Location = new System.Drawing.Point(100, gy);
             radioMulticast.Location = new System.Drawing.Point(190, gy);
             radioUnicast.Location = new System.Drawing.Point(270, gy);
-            gy += 35;
+            gy += lineHeight + 5;
 
             chkAutoDetectFormat.Location = new System.Drawing.Point(10, gy);
             lblDetectedFormat.Location = new System.Drawing.Point(160, gy + 2);
-            gy += 30;
+            gy += lineHeight;
 
             lblBitWidth.Location = new System.Drawing.Point(10, gy);
             numBitWidth.Location = new System.Drawing.Point(100, gy);
             lblSampleRate.Location = new System.Drawing.Point(170, gy);
             numSampleRate.Location = new System.Drawing.Point(250, gy);
-            gy += 30;
+            gy += lineHeight;
 
             lblChannels.Location = new System.Drawing.Point(10, gy);
             numChannels.Location = new System.Drawing.Point(100, gy);
-            gy += 40;
+            gy += lineHeight + 10;  // Plus d'espace avant la section buffer
 
             chkAutoBuffer.Location = new System.Drawing.Point(10, gy);
             numBufferDuration.Location = new System.Drawing.Point(120, gy);
-            gy += 30;
+            gy += lineHeight;
 
             chkAutoWasapi.Location = new System.Drawing.Point(10, gy);
             numWasapiLatency.Location = new System.Drawing.Point(120, gy);
-            gy += 30;
+            gy += lineHeight;
 
             chkExclusiveMode.Location = new System.Drawing.Point(10, gy);
-            gy += 35;
+            gy += lineHeight + 5;
 
             lblVolumeLabel.Location = new System.Drawing.Point(10, gy);
             trackBarVolume.Location = new System.Drawing.Point(80, gy - 5);
@@ -332,7 +334,7 @@ namespace ScreamReader
 
             // Stats group (right side)
             grpStats.Location = new System.Drawing.Point(370, y);
-            grpStats.Size = new System.Drawing.Size(this.ClientSize.Width - 370 - margin, 350);
+            grpStats.Size = new System.Drawing.Size(this.ClientSize.Width - 370 - margin, 380);  // Augmenté de 350 à 380
             grpStats.Anchor = System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Left | System.Windows.Forms.AnchorStyles.Right;  // S'étend horizontalement
 
             int sy = 25;
@@ -405,7 +407,7 @@ namespace ScreamReader
             this.Controls.Add(grpStats);
 
             // Logs group (bottom, full width)
-            y += 360;
+            y += 390;  // Augmenté de 360 à 390 pour correspondre à la nouvelle hauteur des groupes
             grpLogs.Location = new System.Drawing.Point(margin, y);
             grpLogs.Size = new System.Drawing.Size(this.ClientSize.Width - margin * 2, this.ClientSize.Height - y - margin);
             grpLogs.Anchor = System.Windows.Forms.AnchorStyles.Left | System.Windows.Forms.AnchorStyles.Right | 
