@@ -144,7 +144,7 @@ namespace ScreamReader
                     var rsws = new BufferedWaveProvider(
                         new WaveFormat(this.SampleRate, this.BitWidth, this.ChannelCount))
                     {
-                        BufferDuration = TimeSpan.FromMilliseconds(20), // Reduced from 100ms to 20ms for lower latency
+                        BufferDuration = TimeSpan.FromMilliseconds(10), // Reduced to 10ms for minimal latency
                         DiscardOnBufferOverflow = true
                     };
 
@@ -181,7 +181,7 @@ namespace ScreamReader
 
                                 rsws = new BufferedWaveProvider(new WaveFormat(newRate, currentWidth, currentChannels))
                                 {
-                                    BufferDuration = TimeSpan.FromMilliseconds(20), // Reduced from 100ms to 20ms for lower latency
+                                    BufferDuration = TimeSpan.FromMilliseconds(10), // Reduced to 10ms for minimal latency
                                     DiscardOnBufferOverflow = true
                                 };
 
@@ -272,7 +272,7 @@ namespace ScreamReader
                 using (var mmDeviceEnum = new MMDeviceEnumerator())
                 {
                     var device = mmDeviceEnum.GetDefaultAudioEndpoint(DataFlow.Render, Role.Multimedia);
-                    return (int)(device.AudioEndpointVolume.MasterScalarVolume * 100);
+                    return (int)(device.AudioEndpointVolume.MasterVolumeLevelScalar * 100);
                 }
             }
             catch (Exception ex)
@@ -302,18 +302,10 @@ namespace ScreamReader
             {
                 var device = mmDeviceEnum.GetDefaultAudioEndpoint(DataFlow.Render, Role.Multimedia);
                 
-                try
-                {
-                    // Try Exclusive mode first for minimal latency
-                    this.output = new WasapiOut(device, AudioClientShareMode.Exclusive, false, 10);
-                    Debug.WriteLine("[UdpWaveStreamPlayer] Using Exclusive mode for minimal latency");
-                }
-                catch (Exception ex)
-                {
-                    Debug.WriteLine($"[UdpWaveStreamPlayer] Exclusive mode failed: {ex.Message}. Falling back to Shared mode.");
-                    // Fallback to Shared mode if Exclusive fails
-                    this.output = new WasapiOut(device, AudioClientShareMode.Shared, false, 20);
-                }
+                // Use Shared mode to ensure the application appears in Windows audio mixer
+                // with optimized latency settings
+                this.output = new WasapiOut(device, AudioClientShareMode.Shared, false, 20);
+                Debug.WriteLine("[UdpWaveStreamPlayer] Using Shared mode for Windows mixer compatibility with 20ms latency");
             }
 
             this.currentWaveProvider = waveProvider;
