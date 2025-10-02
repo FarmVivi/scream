@@ -167,12 +167,14 @@ namespace ScreamReader
                     byte currentChannelsMapLsb = (this.ChannelCount == 2) ? (byte)0x03 : (byte)0x01;
                     byte currentChannelsMapMsb = 0x00;
 
+                    var bufferDuration = GetOptimalBufferDuration();
                     var rsws = new BufferedWaveProvider(
                         new WaveFormat(this.SampleRate, this.BitWidth, this.ChannelCount))
                     {
-                        BufferDuration = GetOptimalBufferDuration(), // Dynamically optimized based on system capabilities
+                        BufferDuration = bufferDuration,
                         DiscardOnBufferOverflow = true
                     };
+                    LogManager.Log($"[UdpWaveStreamPlayer] Created BufferedWaveProvider with {bufferDuration.TotalMilliseconds}ms buffer");
 
                     InitializeOutputDevice(rsws);
 
@@ -233,6 +235,12 @@ namespace ScreamReader
 
                             // Add samples (starting after the 5-byte header)
                             rsws.AddSamples(data, 5, data.Length - 5);
+                            
+                            // Log buffer status every 50 packets to monitor for issues
+                            if (packetCount % 50 == 0)
+                            {
+                                LogManager.Log($"[UdpWaveStreamPlayer] Buffer status: {rsws.BufferedBytes} bytes buffered, {rsws.BufferedDuration.TotalMilliseconds:F1}ms buffered");
+                            }
                         }
                         catch (SocketException ex)
                         {
@@ -336,16 +344,16 @@ namespace ScreamReader
                     var audioClient = device.AudioClient;
                     var format = audioClient.MixFormat;
                     
-                    // For high sample rates (48kHz+), we can use smaller buffers
+                    // For high sample rates (48kHz+), use larger buffers to prevent crackling
                     if (format.SampleRate >= 48000)
                     {
-                        LogManager.Log("[UdpWaveStreamPlayer] Auto-detected: Using 20ms buffer for high-quality device");
-                        return TimeSpan.FromMilliseconds(20); // Conservative for stability
+                        LogManager.Log("[UdpWaveStreamPlayer] Auto-detected: Using 100ms buffer for high-quality device (prevents crackling)");
+                        return TimeSpan.FromMilliseconds(100); // Larger buffer for stability
                     }
                     else
                     {
-                        LogManager.Log("[UdpWaveStreamPlayer] Auto-detected: Using 50ms buffer for standard device");
-                        return TimeSpan.FromMilliseconds(50); // More conservative for lower sample rates
+                        LogManager.Log("[UdpWaveStreamPlayer] Auto-detected: Using 150ms buffer for standard device");
+                        return TimeSpan.FromMilliseconds(150); // Even larger for lower sample rates
                     }
                 }
             }
@@ -439,8 +447,8 @@ namespace ScreamReader
         {
             // Try progressively higher latencies until one works
             int[] latencyOptions = shareMode == AudioClientShareMode.Exclusive 
-                ? new int[] { 10, 20, 30, 50 }  // Exclusive mode can handle lower latencies
-                : new int[] { 20, 30, 50, 100 }; // Shared mode with reasonable latencies for mixer visibility
+                ? new int[] { 20, 50, 100, 200 }  // Exclusive mode with higher latencies for stability
+                : new int[] { 100, 150, 200, 300 }; // Shared mode with higher latencies to prevent crackling
             
             bool success = false;
             
