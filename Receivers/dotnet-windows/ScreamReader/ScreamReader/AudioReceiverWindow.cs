@@ -526,7 +526,7 @@ namespace ScreamReader
                 {
                     chkAutoBuffer.Checked = true;
                     numBufferDuration.Enabled = false;
-                    numBufferDuration.Value = 30;
+                    numBufferDuration.Value = 48;  // Valeur par défaut affichée
                 }
                 else
                 {
@@ -540,7 +540,7 @@ namespace ScreamReader
                 {
                     chkAutoWasapi.Checked = true;
                     numWasapiLatency.Enabled = false;
-                    numWasapiLatency.Value = 20;
+                    numWasapiLatency.Value = 2;  // Valeur par défaut affichée
                 }
                 else
                 {

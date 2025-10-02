@@ -21,18 +21,18 @@ namespace ScreamReader
         public static bool IsMulticast { get; set; } = true;
         
         // Audio Format Settings (-1 = auto-detect)
-        public static int BitWidth { get; set; } = -1;
-        public static int SampleRate { get; set; } = -1;
-        public static int Channels { get; set; } = -1;
+        public static int BitWidth { get; set; } = 16;
+        public static int SampleRate { get; set; } = 48000;
+        public static int Channels { get; set; } = 2;
         
         // Auto-Detection Flags
         public static bool IsAutoDetectFormat { get; set; } = true;  // true = auto-detect format from stream
-        public static bool IsAutoBuffer { get; set; } = true;        // true = adaptive buffer management
-        public static bool IsAutoWasapi { get; set; } = true;        // true = adaptive WASAPI latency
+        public static bool IsAutoBuffer { get; set; } = false;       // false = utiliser les valeurs manuelles
+        public static bool IsAutoWasapi { get; set; } = false;       // false = utiliser les valeurs manuelles
         
         // Buffer Settings (-1 = auto-adapt)
-        public static int BufferDuration { get; set; } = -1;
-        public static int WasapiLatency { get; set; } = -1;
+        public static int BufferDuration { get; set; } = 48;
+        public static int WasapiLatency { get; set; } = 2;
         public static bool UseExclusiveMode { get; set; } = false;
         
         // Application Settings
