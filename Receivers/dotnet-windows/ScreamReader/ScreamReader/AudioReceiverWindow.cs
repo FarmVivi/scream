@@ -96,6 +96,32 @@ namespace ScreamReader
             LogManager.LogInfo($"Configuration chargée: {currentConfig}");
         }
 
+        /// <summary>
+        /// Force la fermeture complète de l'application (utilisé par le menu système)
+        /// </summary>
+        public void ForceClose()
+        {
+            // Désactiver le comportement "minimize to tray"
+            this.FormClosing -= OnFormClosing;
+            
+            // Faire le cleanup
+            SaveConfiguration();
+            StopAudio();
+            
+            if (audioPlayer != null)
+            {
+                audioPlayer.Dispose();
+                audioPlayer = null;
+            }
+            
+            statsUpdateTimer?.Stop();
+            statsUpdateTimer?.Dispose();
+            LogManager.LogAdded -= OnLogAdded;
+            
+            // Fermer réellement
+            this.Close();
+        }
+
         private void OnFormClosing(object sender, FormClosingEventArgs e)
         {
             if (e.CloseReason == CloseReason.UserClosing)

@@ -46,8 +46,10 @@ namespace ScreamReader
             trayMenu.Items.Add("-");
             trayMenu.Items.Add("Quitter", null, (s, e) =>
             {
+                LogManager.LogInfo("Fermeture de l'application demandée");
                 trayIcon.Visible = false;
-                mainWindow.Close();
+                trayIcon.Dispose();
+                mainWindow.ForceClose(); // Fermeture complète avec nettoyage
                 Application.Exit();
             });
             trayIcon.ContextMenuStrip = trayMenu;
