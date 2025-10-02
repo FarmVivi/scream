@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net;
@@ -33,15 +33,26 @@ namespace ScreamReader
         }
 
         /// <summary>
+        /// Initialize the client with audio optimization parameters.
+        /// </summary>
+        public MulticastUdpWaveStreamPlayer(int bitWidth, int rate, int channels, int multicastPort, IPAddress multicastAddress, int bufferDuration, int wasapiLatency, bool useExclusiveMode) : base(bitWidth, rate, channels, bufferDuration, wasapiLatency, useExclusiveMode)
+        {
+            this.multicastPort = multicastPort;
+            this.multicastAddress = multicastAddress;
+        }
+
+        /// <summary>
         /// Configure UDP client.
         /// </summary>
         protected override void ConfigureUdpClient(UdpClient udpClient, IPEndPoint localEp)
         {
             localEp = new IPEndPoint(IPAddress.Any, this.multicastPort);
+            LogManager.Log($"[MulticastUdpWaveStreamPlayer] Binding to multicast address {this.multicastAddress}:{this.multicastPort}");
 
             udpClient.Client.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
             udpClient.Client.Bind(localEp);
             udpClient.JoinMulticastGroup(this.multicastAddress);
+            LogManager.Log($"[MulticastUdpWaveStreamPlayer] Successfully joined multicast group {this.multicastAddress}");
         }
     }
 }

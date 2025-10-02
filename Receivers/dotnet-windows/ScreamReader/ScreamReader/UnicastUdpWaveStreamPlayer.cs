@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net.Sockets;
@@ -33,16 +33,25 @@ namespace ScreamReader
         }
 
         /// <summary>
+        /// Initialize the client with audio optimization parameters.
+        /// </summary>
+        public UnicastUdpWaveStreamPlayer(int bitWidth, int rate, int channels, int unicastPort, IPAddress localAddress, int bufferDuration, int wasapiLatency, bool useExclusiveMode) : base(bitWidth, rate, channels, bufferDuration, wasapiLatency, useExclusiveMode)
+        {
+            this.unicastPort = unicastPort;
+            this.localAddress = localAddress ?? IPAddress.Any; // Default to any local address
+        }
+
+        /// <summary>
         /// Configure UDP client for unicast communication.
         /// </summary>
         protected override void ConfigureUdpClient(UdpClient udpClient, IPEndPoint localEp)
         {
             localEp = new IPEndPoint(this.localAddress, this.unicastPort);
+            LogManager.Log($"[UnicastUdpWaveStreamPlayer] Binding to unicast address {this.localAddress}:{this.unicastPort}");
 
             udpClient.Client.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
             udpClient.Client.Bind(localEp);
-
-            Console.WriteLine($"Listening for unicast packets on {localEp.Address}:{localEp.Port}");
+            LogManager.Log($"[UnicastUdpWaveStreamPlayer] Successfully bound to {localEp.Address}:{localEp.Port}");
         }
     }
 }
