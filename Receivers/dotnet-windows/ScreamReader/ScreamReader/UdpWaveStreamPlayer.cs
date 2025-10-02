@@ -39,6 +39,12 @@ namespace ScreamReader
         // Adaptive buffer management (persistant entre les sessions)
         private AdaptiveBufferManager bufferManager;
         
+        // Pre-buffering and buffer monitoring
+        private bool isWasapiPlaying = false;
+        private const int PRE_BUFFER_THRESHOLD_PERCENT = 40;  // Remplir à 40% avant de démarrer
+        private const int LOW_BUFFER_THRESHOLD_PERCENT = 15;  // Pause si descend sous 15%
+        private const int RESUME_BUFFER_THRESHOLD_PERCENT = 40; // Reprendre à 40%
+        
         // Statistics tracking
         private StreamStats currentStats;
         private readonly object statsLock = new object();
@@ -380,7 +386,7 @@ namespace ScreamReader
                                 }
                             }
                             
-                            if (localPacketCount <= 5) // Log first 5 packets in detail
+                            if (localPacketCount <= 3) // Log first 3 packets only
                             {
                                 LogManager.LogDebug($"[UdpWaveStreamPlayer] Received packet #{localPacketCount}: {data.Length} bytes from {localEp}");
                                 if (data.Length >= 5)
@@ -467,13 +473,16 @@ namespace ScreamReader
                                 {
                                     InitializeOutputDevice(rsws);
                                     outputInitialized = true;
-                                    LogManager.Log($"[UdpWaveStreamPlayer] WASAPI initialized and playing with detected format");
+                                    // isWasapiPlaying déjà à false, le pré-buffering démarrera la lecture
+                                    LogManager.LogInfo($"[UdpWaveStreamPlayer] WASAPI initialized with detected format");
                                 }
                                 else if (outputInitialized)
                                 {
                                     // Le format a changé, réinitialiser WASAPI avec le nouveau buffer
                                     InitializeOutputDevice(rsws);
-                                    // InitializeOutputDevice() appelle déjà Play(), pas besoin de le rappeler
+                                    // Réinitialiser le flag pour forcer un nouveau pré-buffering
+                                    isWasapiPlaying = false;
+                                    LogManager.LogInfo($"[UdpWaveStreamPlayer] WASAPI re-initialized due to format change");
                                 }
                             }
                             
@@ -483,7 +492,8 @@ namespace ScreamReader
                             {
                                 InitializeOutputDevice(rsws);
                                 outputInitialized = true;
-                                LogManager.Log($"[UdpWaveStreamPlayer] WASAPI initialized (mode manuel, format matching)");
+                                // isWasapiPlaying déjà à false, le pré-buffering démarrera la lecture
+                                LogManager.LogInfo($"[UdpWaveStreamPlayer] WASAPI initialized (manual mode)");
                             }
 
                             // Audio data starts at byte 5
@@ -500,6 +510,7 @@ namespace ScreamReader
                                 // Mettre à jour les stats du buffer à CHAQUE paquet pour un affichage fluide dans l'UI
                                 var bufferedMs = rsws.BufferedDuration.TotalMilliseconds;
                                 var bufferCapacityMs = rsws.BufferDuration.TotalMilliseconds;
+                                var bufferFillPercent = (bufferedMs / bufferCapacityMs) * 100.0;
                                 
                                 // Mettre à jour les stats directement depuis AdaptiveBufferManager
                                 lock (statsLock)
@@ -508,6 +519,33 @@ namespace ScreamReader
                                     currentStats.NetworkBufferCapacityMs = bufferManager.NetworkBufferCapacityMs;
                                     currentStats.WasapiBufferedMs = bufferManager.WasapiBufferedMs;
                                     currentStats.WasapiBufferCapacityMs = bufferManager.WasapiBufferCapacityMs;
+                                }
+                                
+                                // === PRÉ-BUFFERING INTELLIGENT ===
+                                // Gestion automatique de Play/Pause basée sur le niveau du buffer
+                                if (outputInitialized && this.output != null)
+                                {
+                                    if (!isWasapiPlaying)
+                                    {
+                                        // Attendre que le buffer soit suffisamment rempli avant de démarrer
+                                        if (bufferFillPercent >= PRE_BUFFER_THRESHOLD_PERCENT)
+                                        {
+                                            this.output.Play();
+                                            isWasapiPlaying = true;
+                                            LogManager.LogDebug($"[UdpWaveStreamPlayer] ▶ Playback started after pre-buffering ({bufferFillPercent:F1}% - {bufferedMs:F1}ms/{bufferCapacityMs:F0}ms)");
+                                        }
+                                    }
+                                    else
+                                    {
+                                        // Surveiller le niveau du buffer pendant la lecture
+                                        if (bufferFillPercent < LOW_BUFFER_THRESHOLD_PERCENT)
+                                        {
+                                            // Buffer critique - mettre en pause pour éviter les underruns
+                                            this.output.Pause();
+                                            isWasapiPlaying = false;
+                                            LogManager.LogDebug($"[UdpWaveStreamPlayer] ⏸ Buffer too low ({bufferFillPercent:F1}%), pausing for re-buffering...");
+                                        }
+                                    }
                                 }
                                 
                                 // Enregistrer la mesure pour l'adaptation tous les 25 paquets (moins intensif)
@@ -532,7 +570,7 @@ namespace ScreamReader
                         {
                             if (ex.SocketErrorCode == SocketError.TimedOut)
                             {
-                                LogManager.Log("[UdpWaveStreamPlayer] No data received for 10 seconds - check if Scream is sending data");
+                                // Timeout silencieux - continuer d'attendre sans logger
                                 continue; // Continue waiting
                             }
                             else
@@ -722,8 +760,11 @@ namespace ScreamReader
             this.currentWaveProvider = waveProvider;
             this.output.Init(this.currentWaveProvider);
             this.output.Volume = (float)this.volume / 100f;
-            this.output.Play();
-            LogManager.Log($"[UdpWaveStreamPlayer] ✓ Audio playback started (Total latency: ~{bufferManager?.TotalLatencyMs ?? 0}ms)");
+            
+            // NE PAS appeler Play() ici - le pré-buffering le fera automatiquement
+            // quand le buffer sera suffisamment rempli
+            isWasapiPlaying = false;
+            LogManager.Log($"[UdpWaveStreamPlayer] ✓ WASAPI initialized, waiting for pre-buffering ({PRE_BUFFER_THRESHOLD_PERCENT}% of buffer)");
         }
 
         #region dispose
