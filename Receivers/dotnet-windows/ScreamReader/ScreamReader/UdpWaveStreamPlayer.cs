@@ -23,7 +23,8 @@ namespace ScreamReader
 
         private MMDeviceEnumerator deviceEnumerator; // For default device change notifications
 
-        private int volume = 100; // Default volume at 100%
+        private int volume;
+        private bool volumeInitialized = false; // Track if volume has been set by user
 
         // Fields to store constructor parameters
         protected int BitWidth { get; set; }
@@ -52,6 +53,7 @@ namespace ScreamReader
                     throw new ArgumentOutOfRangeException(nameof(value));
 
                 this.volume = value;
+                this.volumeInitialized = true; // Mark that volume has been set by user
                 if (this.output != null)
                 {
                     this.output.Volume = (float)value / 100f;
@@ -254,9 +256,11 @@ namespace ScreamReader
         {
             if (waveProvider == null) return;
 
-            // Dispose of previous output if it exists
+            // Save the current volume if output exists
+            float currentVolume = 1.0f;
             if (this.output != null)
             {
+                currentVolume = this.output.Volume;
                 this.output.Stop();
                 this.output.Dispose();
             }
@@ -271,7 +275,20 @@ namespace ScreamReader
 
             this.currentWaveProvider = waveProvider;
             this.output.Init(this.currentWaveProvider);
-            this.output.Volume = (float)this.volume / 100f;
+            
+            // Only set volume if it has been explicitly set by the user
+            // Otherwise, keep the system's current volume
+            if (this.volumeInitialized)
+            {
+                this.output.Volume = (float)this.volume / 100f;
+            }
+            else if (this.output != null)
+            {
+                // Restore the previous volume or keep default
+                this.output.Volume = currentVolume;
+                this.volume = (int)(currentVolume * 100);
+            }
+            
             this.output.Play();
         }
 
