@@ -1,4 +1,4 @@
-namespace ScreamReader
+﻿namespace ScreamReader
 {
     partial class AudioReceiverWindow
     {
@@ -6,7 +6,7 @@ namespace ScreamReader
 
         // Play/Stop
         private System.Windows.Forms.Button btnPlayStop;
-        
+
         // Configuration GroupBox
         private System.Windows.Forms.GroupBox grpConfig;
         private System.Windows.Forms.Label lblIpAddress;
@@ -69,6 +69,9 @@ namespace ScreamReader
         private System.Windows.Forms.ComboBox cmbLogLevel;
         private System.Windows.Forms.Button btnClearLogs;
 
+        // Layout containers
+        private System.Windows.Forms.TableLayoutPanel layoutRoot;
+
         protected override void Dispose(bool disposing)
         {
             if (disposing && (components != null))
@@ -82,53 +85,57 @@ namespace ScreamReader
         {
             this.components = new System.ComponentModel.Container();
             this.SuspendLayout();
-            
-            // Form properties
-            this.AutoScaleDimensions = new System.Drawing.SizeF(8F, 16F);
-            this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;  // Font-based scaling (standard)
-            this.ClientSize = new System.Drawing.Size(1400, 950);  // Augmenté de 900 à 950 pour plus d'espace
-            this.MinimumSize = new System.Drawing.Size(1200, 750);  // Augmenté de 700 à 750
-            this.Name = "AudioReceiverWindow";
-            this.Text = "ScreamReader";
-            this.Icon = Properties.Resources.speaker_ico;
-            this.StartPosition = System.Windows.Forms.FormStartPosition.CenterScreen;
-            this.BackColor = System.Drawing.Color.FromArgb(240, 240, 240);
-            
-            this.Resize += AudioReceiverWindow_Resize;  // Gestion du redimensionnement
 
             InitializeControls();
             LayoutControls();
 
+            this.AutoScaleDimensions = new System.Drawing.SizeF(8F, 16F);
+            this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
+            this.ClientSize = new System.Drawing.Size(1280, 860);
+            this.MinimumSize = new System.Drawing.Size(1000, 720);
+            this.Name = "AudioReceiverWindow";
+            this.Text = "ScreamReader";
+            this.Icon = Properties.Resources.speaker_ico;
+            this.StartPosition = System.Windows.Forms.FormStartPosition.CenterScreen;
+            this.BackColor = System.Drawing.Color.FromArgb(246, 246, 246);
+
             this.ResumeLayout(false);
-            this.PerformLayout();
         }
 
         private void InitializeControls()
         {
             // Play/Stop Button
             btnPlayStop = new System.Windows.Forms.Button();
-            btnPlayStop.Size = new System.Drawing.Size(150, 50);
-            btnPlayStop.Font = new System.Drawing.Font("Segoe UI", 12F, System.Drawing.FontStyle.Bold);
-            btnPlayStop.Text = "▶ Start";
-            btnPlayStop.BackColor = System.Drawing.Color.LightGreen;
+            btnPlayStop.AutoSize = true;
+            btnPlayStop.AutoSizeMode = System.Windows.Forms.AutoSizeMode.GrowAndShrink;
+            btnPlayStop.Padding = new System.Windows.Forms.Padding(32, 12, 32, 12);
+            btnPlayStop.Font = new System.Drawing.Font("Segoe UI", 11F, System.Drawing.FontStyle.Bold);
+            btnPlayStop.Text = "▶ Démarrer";
+            btnPlayStop.BackColor = System.Drawing.Color.FromArgb(0, 126, 249);
+            btnPlayStop.ForeColor = System.Drawing.Color.White;
             btnPlayStop.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
+            btnPlayStop.FlatAppearance.BorderSize = 0;
             btnPlayStop.Cursor = System.Windows.Forms.Cursors.Hand;
+            btnPlayStop.UseMnemonic = false;
+            btnPlayStop.UseVisualStyleBackColor = false;
+            btnPlayStop.FlatAppearance.MouseOverBackColor = System.Drawing.Color.FromArgb(0, 102, 204);
+            btnPlayStop.FlatAppearance.MouseDownBackColor = System.Drawing.Color.FromArgb(0, 92, 184);
             btnPlayStop.Click += btnPlayStop_Click;
 
             // Configuration Group
             grpConfig = new System.Windows.Forms.GroupBox();
-            grpConfig.Text = "⚙ Configuration";
+            grpConfig.Text = "Configuration";
             grpConfig.Font = new System.Drawing.Font("Segoe UI", 9F, System.Drawing.FontStyle.Bold);
 
-            lblIpAddress = new System.Windows.Forms.Label { Text = "Adresse IP:", AutoSize = true };
-            txtIpAddress = new System.Windows.Forms.TextBox { Width = 150 };
+            lblIpAddress = new System.Windows.Forms.Label { Text = "Adresse IP :", AutoSize = true };
+            txtIpAddress = new System.Windows.Forms.TextBox();
             txtIpAddress.TextChanged += OnConfigChanged;
 
-            lblPort = new System.Windows.Forms.Label { Text = "Port:", AutoSize = true };
+            lblPort = new System.Windows.Forms.Label { Text = "Port :", AutoSize = true };
             numPort = new System.Windows.Forms.NumericUpDown();
             numPort.Minimum = 1;
             numPort.Maximum = 65535;
-            numPort.Width = 80;
+            numPort.Width = 100;
             numPort.ValueChanged += OnConfigChanged;
 
             radioMulticast = new System.Windows.Forms.RadioButton { Text = "Multicast", AutoSize = true };
@@ -136,100 +143,99 @@ namespace ScreamReader
             radioUnicast = new System.Windows.Forms.RadioButton { Text = "Unicast", AutoSize = true };
             radioUnicast.CheckedChanged += OnConfigChanged;
 
-            chkAutoDetectFormat = new System.Windows.Forms.CheckBox { Text = "Auto-detect format", AutoSize = true, Checked = true };
+            chkAutoDetectFormat = new System.Windows.Forms.CheckBox { Text = "Détection auto du format", AutoSize = true, Checked = true };
             chkAutoDetectFormat.CheckedChanged += chkAutoDetectFormat_CheckedChanged;
-            
-            lblDetectedFormat = new System.Windows.Forms.Label { Text = "Format détecté: --", AutoSize = true, ForeColor = System.Drawing.Color.DarkGreen };
+
+            lblDetectedFormat = new System.Windows.Forms.Label { Text = "Format détecté : --", AutoSize = true, ForeColor = System.Drawing.Color.DarkGreen };
             lblDetectedFormat.Font = new System.Drawing.Font("Segoe UI", 9F, System.Drawing.FontStyle.Italic);
 
-            lblBitWidth = new System.Windows.Forms.Label { Text = "Bits:", AutoSize = true };
+            lblBitWidth = new System.Windows.Forms.Label { Text = "Bits :", AutoSize = true };
             numBitWidth = new System.Windows.Forms.NumericUpDown();
             numBitWidth.Minimum = 16;
             numBitWidth.Maximum = 32;
             numBitWidth.Increment = 8;
-            numBitWidth.Width = 60;
+            numBitWidth.Width = 80;
             numBitWidth.ValueChanged += OnConfigChanged;
 
-            lblSampleRate = new System.Windows.Forms.Label { Text = "Freq (Hz):", AutoSize = true };
+            lblSampleRate = new System.Windows.Forms.Label { Text = "Fréquence (Hz) :", AutoSize = true };
             numSampleRate = new System.Windows.Forms.NumericUpDown();
             numSampleRate.Minimum = 8000;
             numSampleRate.Maximum = 192000;
             numSampleRate.Increment = 100;
-            numSampleRate.Width = 80;
+            numSampleRate.Width = 100;
             numSampleRate.ValueChanged += OnConfigChanged;
 
-            lblChannels = new System.Windows.Forms.Label { Text = "Canaux:", AutoSize = true };
+            lblChannels = new System.Windows.Forms.Label { Text = "Canaux :", AutoSize = true };
             numChannels = new System.Windows.Forms.NumericUpDown();
             numChannels.Minimum = 1;
             numChannels.Maximum = 8;
-            numChannels.Width = 60;
+            numChannels.Width = 80;
             numChannels.ValueChanged += OnConfigChanged;
 
-            chkAutoBuffer = new System.Windows.Forms.CheckBox { Text = "Buffer Auto", AutoSize = true, Checked = true };
+            chkAutoBuffer = new System.Windows.Forms.CheckBox { Text = "Buffer auto", AutoSize = true, Checked = true };
             chkAutoBuffer.CheckedChanged += chkAutoBuffer_CheckedChanged;
             numBufferDuration = new System.Windows.Forms.NumericUpDown();
             numBufferDuration.Minimum = 1;
             numBufferDuration.Maximum = 1000;
-            numBufferDuration.Width = 60;
+            numBufferDuration.Width = 80;
             numBufferDuration.ValueChanged += OnConfigChanged;
 
-            chkAutoWasapi = new System.Windows.Forms.CheckBox { Text = "WASAPI Auto", AutoSize = true, Checked = true };
+            chkAutoWasapi = new System.Windows.Forms.CheckBox { Text = "WASAPI auto", AutoSize = true, Checked = true };
             chkAutoWasapi.CheckedChanged += chkAutoWasapi_CheckedChanged;
             numWasapiLatency = new System.Windows.Forms.NumericUpDown();
             numWasapiLatency.Minimum = 1;
             numWasapiLatency.Maximum = 1000;
-            numWasapiLatency.Width = 60;
+            numWasapiLatency.Width = 80;
             numWasapiLatency.ValueChanged += OnConfigChanged;
 
-            chkExclusiveMode = new System.Windows.Forms.CheckBox { Text = "Mode Exclusif", AutoSize = true };
+            chkExclusiveMode = new System.Windows.Forms.CheckBox { Text = "Mode exclusif", AutoSize = true };
             chkExclusiveMode.CheckedChanged += OnConfigChanged;
 
             // Stats Group
             grpStats = new System.Windows.Forms.GroupBox();
-            grpStats.Text = "📊 Statistiques en temps réel";
+            grpStats.Text = "Statistiques temps réel";
             grpStats.Font = new System.Drawing.Font("Segoe UI", 9F, System.Drawing.FontStyle.Bold);
 
-            lblConnectionStatusLabel = new System.Windows.Forms.Label { Text = "État:", AutoSize = true };
-            lblConnectionStatus = new System.Windows.Forms.Label { Text = "✗ Déconnecté", AutoSize = true, ForeColor = System.Drawing.Color.Gray };
+            lblConnectionStatusLabel = new System.Windows.Forms.Label { Text = "État :", AutoSize = true };
+            lblConnectionStatus = new System.Windows.Forms.Label { Text = "Deconnecte", AutoSize = true, ForeColor = System.Drawing.Color.Gray };
 
-            lblRemoteEndpointLabel = new System.Windows.Forms.Label { Text = "Source:", AutoSize = true };
+            lblRemoteEndpointLabel = new System.Windows.Forms.Label { Text = "Source :", AutoSize = true };
             lblRemoteEndpoint = new System.Windows.Forms.Label { Text = "-", AutoSize = true };
 
-            lblAudioFormatLabel = new System.Windows.Forms.Label { Text = "Format:", AutoSize = true };
+            lblAudioFormatLabel = new System.Windows.Forms.Label { Text = "Format :", AutoSize = true };
             lblAudioFormat = new System.Windows.Forms.Label { Text = "-", AutoSize = true };
 
-            lblPacketsReceivedLabel = new System.Windows.Forms.Label { Text = "Paquets:", AutoSize = true };
+            lblPacketsReceivedLabel = new System.Windows.Forms.Label { Text = "Paquets :", AutoSize = true };
             lblPacketsReceived = new System.Windows.Forms.Label { Text = "-", AutoSize = true };
 
-            lblBitrateLabel = new System.Windows.Forms.Label { Text = "Débit:", AutoSize = true };
+            lblBitrateLabel = new System.Windows.Forms.Label { Text = "Débit :", AutoSize = true };
             lblBitrate = new System.Windows.Forms.Label { Text = "-", AutoSize = true };
 
-            lblTotalLatencyLabel = new System.Windows.Forms.Label { Text = "Latence:", AutoSize = true, Font = new System.Drawing.Font("Segoe UI", 9F, System.Drawing.FontStyle.Bold) };
-            lblTotalLatency = new System.Windows.Forms.Label { Text = "-", AutoSize = true, Font = new System.Drawing.Font("Segoe UI", 9F, System.Drawing.FontStyle.Bold) };
+            lblTotalLatencyLabel = new System.Windows.Forms.Label { Text = "Latence :", AutoSize = true };
+            lblTotalLatency = new System.Windows.Forms.Label { Text = "-", AutoSize = true };
 
-            // Network Buffer
-            grpNetworkBuffer = new System.Windows.Forms.GroupBox { Text = "📦 Buffer Réseau" };
-            progressNetworkBuffer = new System.Windows.Forms.ProgressBar { Width = 300, Height = 25 };
+            // Buffer stats
+            grpNetworkBuffer = new System.Windows.Forms.GroupBox { Text = "Buffer réseau" };
+            progressNetworkBuffer = new System.Windows.Forms.ProgressBar { Minimum = 0, Maximum = 100 };
             lblNetworkBuffer = new System.Windows.Forms.Label { Text = "-", AutoSize = true };
             lblNetworkBufferPercent = new System.Windows.Forms.Label { Text = "-", AutoSize = true, Font = new System.Drawing.Font("Segoe UI", 9F, System.Drawing.FontStyle.Bold) };
             lblNetworkBufferStatus = new System.Windows.Forms.Label { Text = "-", AutoSize = true };
 
-            // WASAPI Buffer
-            grpWasapiBuffer = new System.Windows.Forms.GroupBox { Text = "🎵 Buffer WASAPI" };
-            progressWasapiBuffer = new System.Windows.Forms.ProgressBar { Width = 300, Height = 25 };
+            grpWasapiBuffer = new System.Windows.Forms.GroupBox { Text = "Buffer WASAPI" };
+            progressWasapiBuffer = new System.Windows.Forms.ProgressBar { Minimum = 0, Maximum = 100 };
             lblWasapiBuffer = new System.Windows.Forms.Label { Text = "-", AutoSize = true };
             lblWasapiBufferPercent = new System.Windows.Forms.Label { Text = "-", AutoSize = true, Font = new System.Drawing.Font("Segoe UI", 9F, System.Drawing.FontStyle.Bold) };
             lblWasapiBufferStatus = new System.Windows.Forms.Label { Text = "-", AutoSize = true };
 
             // Performance
-            lblUnderrunsLabel = new System.Windows.Forms.Label { Text = "Sous-alimentations:", AutoSize = true };
+            lblUnderrunsLabel = new System.Windows.Forms.Label { Text = "Sous-alimentations :", AutoSize = true };
             lblUnderruns = new System.Windows.Forms.Label { Text = "0", AutoSize = true, ForeColor = System.Drawing.Color.Green };
-            lblLastUnderrunLabel = new System.Windows.Forms.Label { Text = "Dernière:", AutoSize = true };
+            lblLastUnderrunLabel = new System.Windows.Forms.Label { Text = "Dernière :", AutoSize = true };
             lblLastUnderrun = new System.Windows.Forms.Label { Text = "-", AutoSize = true };
 
             // Logs
             grpLogs = new System.Windows.Forms.GroupBox();
-            grpLogs.Text = "📋 Journaux";
+            grpLogs.Text = "Journaux";
             grpLogs.Font = new System.Drawing.Font("Segoe UI", 9F, System.Drawing.FontStyle.Bold);
 
             txtLogs = new System.Windows.Forms.RichTextBox();
@@ -242,166 +248,378 @@ namespace ScreamReader
             cmbLogLevel = new System.Windows.Forms.ComboBox();
             cmbLogLevel.DropDownStyle = System.Windows.Forms.ComboBoxStyle.DropDownList;
             cmbLogLevel.Items.AddRange(new object[] { "Debug", "Info", "Warning", "Error" });
-            cmbLogLevel.SelectedIndex = 1; // Info by default
+            cmbLogLevel.SelectedIndex = 1;
             cmbLogLevel.SelectedIndexChanged += cmbLogLevel_SelectedIndexChanged;
 
-            btnClearLogs = new System.Windows.Forms.Button { Text = "Effacer", Width = 80 };
+            btnClearLogs = new System.Windows.Forms.Button { Text = "Effacer" };
             btnClearLogs.Click += btnClearLogs_Click;
         }
-
         private void LayoutControls()
         {
-            int margin = 10;
-            int x = margin, y = margin;
+            this.Controls.Clear();
 
-            // Play button top center
-            btnPlayStop.Location = new System.Drawing.Point((this.ClientSize.Width - btnPlayStop.Width) / 2, y);
-            btnPlayStop.Anchor = System.Windows.Forms.AnchorStyles.Top;  // Reste centré lors du resize
-            this.Controls.Add(btnPlayStop);
-            y += btnPlayStop.Height + margin;
+            layoutRoot = new System.Windows.Forms.TableLayoutPanel();
+            layoutRoot.ColumnCount = 1;
+            layoutRoot.RowCount = 3;
+            layoutRoot.Dock = System.Windows.Forms.DockStyle.Fill;
+            layoutRoot.Padding = new System.Windows.Forms.Padding(16);
+            layoutRoot.BackColor = System.Drawing.Color.Transparent;
+            layoutRoot.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.AutoSize));
+            layoutRoot.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Percent, 55F));
+            layoutRoot.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Percent, 45F));
+            this.Controls.Add(layoutRoot);
 
-            // Configuration group (left side)
-            grpConfig.Location = new System.Drawing.Point(margin, y);
-            grpConfig.Size = new System.Drawing.Size(350, 380);  // Augmenté de 350 à 380 pour plus d'espace
-            grpConfig.Anchor = System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Left;  // Fixe en haut à gauche
-            
-            int gy = 25;
-            int lineHeight = (int)(30 * (this.AutoScaleDimensions.Height / 16F));  // Ajuste en fonction du DPI
-            
-            lblIpAddress.Location = new System.Drawing.Point(10, gy);
-            txtIpAddress.Location = new System.Drawing.Point(100, gy);
-            gy += lineHeight;
-            
-            lblPort.Location = new System.Drawing.Point(10, gy);
-            numPort.Location = new System.Drawing.Point(100, gy);
-            radioMulticast.Location = new System.Drawing.Point(190, gy);
-            radioUnicast.Location = new System.Drawing.Point(270, gy);
-            gy += lineHeight + 5;
+            var headerLayout = new System.Windows.Forms.TableLayoutPanel();
+            headerLayout.ColumnCount = 3;
+            headerLayout.RowCount = 1;
+            headerLayout.Dock = System.Windows.Forms.DockStyle.Fill;
+            headerLayout.ColumnStyles.Add(new System.Windows.Forms.ColumnStyle(System.Windows.Forms.SizeType.Percent, 50F));
+            headerLayout.ColumnStyles.Add(new System.Windows.Forms.ColumnStyle(System.Windows.Forms.SizeType.AutoSize));
+            headerLayout.ColumnStyles.Add(new System.Windows.Forms.ColumnStyle(System.Windows.Forms.SizeType.Percent, 50F));
+            headerLayout.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.AutoSize));
+            headerLayout.Controls.Add(btnPlayStop, 1, 0);
+            layoutRoot.Controls.Add(headerLayout, 0, 0);
 
-            chkAutoDetectFormat.Location = new System.Drawing.Point(10, gy);
-            lblDetectedFormat.Location = new System.Drawing.Point(160, gy + 2);
-            gy += lineHeight;
+            var contentLayout = new System.Windows.Forms.TableLayoutPanel();
+            contentLayout.ColumnCount = 2;
+            contentLayout.RowCount = 1;
+            contentLayout.Dock = System.Windows.Forms.DockStyle.Fill;
+            contentLayout.ColumnStyles.Add(new System.Windows.Forms.ColumnStyle(System.Windows.Forms.SizeType.Percent, 38F));
+            contentLayout.ColumnStyles.Add(new System.Windows.Forms.ColumnStyle(System.Windows.Forms.SizeType.Percent, 62F));
+            contentLayout.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Percent, 100F));
+            contentLayout.Padding = new System.Windows.Forms.Padding(0, 0, 0, 12);
+            layoutRoot.Controls.Add(contentLayout, 0, 1);
 
-            lblBitWidth.Location = new System.Drawing.Point(10, gy);
-            numBitWidth.Location = new System.Drawing.Point(100, gy);
-            lblSampleRate.Location = new System.Drawing.Point(170, gy);
-            numSampleRate.Location = new System.Drawing.Point(250, gy);
-            gy += lineHeight;
+            BuildConfigLayout();
+            BuildStatsLayout();
 
-            lblChannels.Location = new System.Drawing.Point(10, gy);
-            numChannels.Location = new System.Drawing.Point(100, gy);
-            gy += lineHeight + 10;  // Plus d'espace avant la section buffer
+            contentLayout.Controls.Add(grpConfig, 0, 0);
+            contentLayout.Controls.Add(grpStats, 1, 0);
 
-            chkAutoBuffer.Location = new System.Drawing.Point(10, gy);
-            numBufferDuration.Location = new System.Drawing.Point(120, gy);
-            gy += lineHeight;
+            BuildLogsLayout();
+            layoutRoot.Controls.Add(grpLogs, 0, 2);
+        }
 
-            chkAutoWasapi.Location = new System.Drawing.Point(10, gy);
-            numWasapiLatency.Location = new System.Drawing.Point(120, gy);
-            gy += lineHeight;
+        private void BuildConfigLayout()
+        {
+            grpConfig.SuspendLayout();
+            grpConfig.Controls.Clear();
+            grpConfig.Dock = System.Windows.Forms.DockStyle.Fill;
+            grpConfig.Padding = new System.Windows.Forms.Padding(12, 16, 12, 12);
 
-            chkExclusiveMode.Location = new System.Drawing.Point(10, gy);
+            var configLayout = new System.Windows.Forms.TableLayoutPanel();
+            configLayout.ColumnCount = 2;
+            configLayout.Dock = System.Windows.Forms.DockStyle.Fill;
+            configLayout.AutoSize = true;
+            configLayout.AutoSizeMode = System.Windows.Forms.AutoSizeMode.GrowAndShrink;
+            configLayout.ColumnStyles.Add(new System.Windows.Forms.ColumnStyle(System.Windows.Forms.SizeType.AutoSize));
+            configLayout.ColumnStyles.Add(new System.Windows.Forms.ColumnStyle(System.Windows.Forms.SizeType.Percent, 100F));
 
-            grpConfig.Controls.AddRange(new System.Windows.Forms.Control[] {
-                lblIpAddress, txtIpAddress, lblPort, numPort, radioMulticast, radioUnicast,
-                chkAutoDetectFormat, lblDetectedFormat,
-                lblBitWidth, numBitWidth, lblSampleRate, numSampleRate, lblChannels, numChannels,
-                chkAutoBuffer, numBufferDuration, chkAutoWasapi, numWasapiLatency, chkExclusiveMode
-            });
-            this.Controls.Add(grpConfig);
+            int row = 0;
 
-            // Stats group (right side)
-            grpStats.Location = new System.Drawing.Point(370, y);
-            grpStats.Size = new System.Drawing.Size(this.ClientSize.Width - 370 - margin, 380);  // Augmenté de 350 à 380
-            grpStats.Anchor = System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Left | System.Windows.Forms.AnchorStyles.Right;  // S'étend horizontalement
+            configLayout.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.AutoSize));
+            lblIpAddress.Margin = new System.Windows.Forms.Padding(0, 0, 8, 0);
+            txtIpAddress.Dock = System.Windows.Forms.DockStyle.Fill;
+            txtIpAddress.Margin = new System.Windows.Forms.Padding(0, 0, 0, 6);
+            configLayout.Controls.Add(lblIpAddress, 0, row);
+            configLayout.Controls.Add(txtIpAddress, 1, row);
+            row++;
 
-            int sy = 25;
-            lblConnectionStatusLabel.Location = new System.Drawing.Point(10, sy);
-            lblConnectionStatus.Location = new System.Drawing.Point(120, sy);
-            sy += 25;
+            configLayout.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.AutoSize));
+            lblPort.Margin = new System.Windows.Forms.Padding(0, 0, 8, 0);
+            numPort.Margin = new System.Windows.Forms.Padding(0, 0, 0, 6);
+            configLayout.Controls.Add(lblPort, 0, row);
+            configLayout.Controls.Add(numPort, 1, row);
+            row++;
 
-            lblRemoteEndpointLabel.Location = new System.Drawing.Point(10, sy);
-            lblRemoteEndpoint.Location = new System.Drawing.Point(120, sy);
-            sy += 25;
+            configLayout.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.AutoSize));
+            var lblMode = new System.Windows.Forms.Label { Text = "Mode :", AutoSize = true, Margin = new System.Windows.Forms.Padding(0, 0, 8, 0) };
+            var transportLayout = new System.Windows.Forms.FlowLayoutPanel
+            {
+                AutoSize = true,
+                AutoSizeMode = System.Windows.Forms.AutoSizeMode.GrowAndShrink,
+                Dock = System.Windows.Forms.DockStyle.Fill,
+                FlowDirection = System.Windows.Forms.FlowDirection.LeftToRight,
+                WrapContents = false,
+                Margin = new System.Windows.Forms.Padding(0, 0, 0, 6)
+            };
+            radioMulticast.Margin = new System.Windows.Forms.Padding(0, 0, 12, 0);
+            radioUnicast.Margin = new System.Windows.Forms.Padding(0, 0, 12, 0);
+            transportLayout.Controls.Add(radioMulticast);
+            transportLayout.Controls.Add(radioUnicast);
+            configLayout.Controls.Add(lblMode, 0, row);
+            configLayout.Controls.Add(transportLayout, 1, row);
+            row++;
 
-            lblAudioFormatLabel.Location = new System.Drawing.Point(10, sy);
-            lblAudioFormat.Location = new System.Drawing.Point(120, sy);
-            sy += 25;
+            configLayout.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.AutoSize));
+            chkAutoDetectFormat.Margin = new System.Windows.Forms.Padding(0, 12, 0, 0);
+            configLayout.Controls.Add(chkAutoDetectFormat, 0, row);
+            configLayout.SetColumnSpan(chkAutoDetectFormat, 2);
+            row++;
 
-            lblPacketsReceivedLabel.Location = new System.Drawing.Point(10, sy);
-            lblPacketsReceived.Location = new System.Drawing.Point(120, sy);
-            sy += 25;
+            configLayout.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.AutoSize));
+            lblDetectedFormat.Margin = new System.Windows.Forms.Padding(0, 4, 0, 8);
+            configLayout.Controls.Add(lblDetectedFormat, 0, row);
+            configLayout.SetColumnSpan(lblDetectedFormat, 2);
+            row++;
 
-            lblBitrateLabel.Location = new System.Drawing.Point(10, sy);
-            lblBitrate.Location = new System.Drawing.Point(120, sy);
-            sy += 25;
+            configLayout.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.AutoSize));
+            lblBitWidth.Margin = new System.Windows.Forms.Padding(0, 0, 8, 0);
+            numBitWidth.Margin = new System.Windows.Forms.Padding(0, 0, 0, 6);
+            configLayout.Controls.Add(lblBitWidth, 0, row);
+            configLayout.Controls.Add(numBitWidth, 1, row);
+            row++;
 
-            lblTotalLatencyLabel.Location = new System.Drawing.Point(10, sy);
-            lblTotalLatency.Location = new System.Drawing.Point(120, sy);
-            sy += 35;
+            configLayout.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.AutoSize));
+            lblSampleRate.Margin = new System.Windows.Forms.Padding(0, 0, 8, 0);
+            numSampleRate.Margin = new System.Windows.Forms.Padding(0, 0, 0, 6);
+            configLayout.Controls.Add(lblSampleRate, 0, row);
+            configLayout.Controls.Add(numSampleRate, 1, row);
+            row++;
 
-            // Network buffer
-            grpNetworkBuffer.Location = new System.Drawing.Point(10, sy);
-            grpNetworkBuffer.Size = new System.Drawing.Size((grpStats.Width - 30) / 2, 80);  // Largeur dynamique (50% de grpStats)
-            grpNetworkBuffer.Anchor = System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Left | System.Windows.Forms.AnchorStyles.Right;
-            progressNetworkBuffer.Location = new System.Drawing.Point(10, 20);
-            progressNetworkBuffer.Width = grpNetworkBuffer.Width - 20;
-            progressNetworkBuffer.Anchor = System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Left | System.Windows.Forms.AnchorStyles.Right;
-            lblNetworkBuffer.Location = new System.Drawing.Point(10, 50);
-            lblNetworkBufferPercent.Location = new System.Drawing.Point(120, 50);
-            lblNetworkBufferStatus.Location = new System.Drawing.Point(180, 50);
-            grpNetworkBuffer.Controls.AddRange(new System.Windows.Forms.Control[] { 
-                progressNetworkBuffer, lblNetworkBuffer, lblNetworkBufferPercent, lblNetworkBufferStatus 
-            });
+            configLayout.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.AutoSize));
+            lblChannels.Margin = new System.Windows.Forms.Padding(0, 0, 8, 0);
+            numChannels.Margin = new System.Windows.Forms.Padding(0, 0, 0, 12);
+            configLayout.Controls.Add(lblChannels, 0, row);
+            configLayout.Controls.Add(numChannels, 1, row);
+            row++;
 
-            // WASAPI buffer
-            grpWasapiBuffer.Location = new System.Drawing.Point(grpNetworkBuffer.Right + 10, sy);
-            grpWasapiBuffer.Size = new System.Drawing.Size((grpStats.Width - 30) / 2, 80);  // Largeur dynamique (50% de grpStats)
-            grpWasapiBuffer.Anchor = System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Right;
-            progressWasapiBuffer.Location = new System.Drawing.Point(10, 20);
-            progressWasapiBuffer.Width = grpWasapiBuffer.Width - 20;
-            progressWasapiBuffer.Anchor = System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Left | System.Windows.Forms.AnchorStyles.Right;
-            lblWasapiBuffer.Location = new System.Drawing.Point(10, 50);
-            lblWasapiBufferPercent.Location = new System.Drawing.Point(120, 50);
-            lblWasapiBufferStatus.Location = new System.Drawing.Point(180, 50);
-            grpWasapiBuffer.Controls.AddRange(new System.Windows.Forms.Control[] { 
-                progressWasapiBuffer, lblWasapiBuffer, lblWasapiBufferPercent, lblWasapiBufferStatus 
-            });
+            configLayout.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.AutoSize));
+            var lblBuffer = new System.Windows.Forms.Label { Text = "Buffer UDP :", AutoSize = true, Margin = new System.Windows.Forms.Padding(0, 0, 8, 0) };
+            var bufferLayout = new System.Windows.Forms.FlowLayoutPanel
+            {
+                AutoSize = true,
+                AutoSizeMode = System.Windows.Forms.AutoSizeMode.GrowAndShrink,
+                Dock = System.Windows.Forms.DockStyle.Fill,
+                FlowDirection = System.Windows.Forms.FlowDirection.LeftToRight,
+                WrapContents = false,
+                Margin = new System.Windows.Forms.Padding(0, 0, 0, 6)
+            };
+            chkAutoBuffer.Margin = new System.Windows.Forms.Padding(0, 0, 12, 0);
+            bufferLayout.Controls.Add(chkAutoBuffer);
+            bufferLayout.Controls.Add(numBufferDuration);
+            configLayout.Controls.Add(lblBuffer, 0, row);
+            configLayout.Controls.Add(bufferLayout, 1, row);
+            row++;
 
-            sy += 90;
+            configLayout.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.AutoSize));
+            var lblWasapi = new System.Windows.Forms.Label { Text = "Buffer WASAPI :", AutoSize = true, Margin = new System.Windows.Forms.Padding(0, 0, 8, 0) };
+            var wasapiLayout = new System.Windows.Forms.FlowLayoutPanel
+            {
+                AutoSize = true,
+                AutoSizeMode = System.Windows.Forms.AutoSizeMode.GrowAndShrink,
+                Dock = System.Windows.Forms.DockStyle.Fill,
+                FlowDirection = System.Windows.Forms.FlowDirection.LeftToRight,
+                WrapContents = false,
+                Margin = new System.Windows.Forms.Padding(0, 0, 0, 6)
+            };
+            chkAutoWasapi.Margin = new System.Windows.Forms.Padding(0, 0, 12, 0);
+            wasapiLayout.Controls.Add(chkAutoWasapi);
+            wasapiLayout.Controls.Add(numWasapiLatency);
+            configLayout.Controls.Add(lblWasapi, 0, row);
+            configLayout.Controls.Add(wasapiLayout, 1, row);
+            row++;
 
-            lblUnderrunsLabel.Location = new System.Drawing.Point(10, sy);
-            lblUnderruns.Location = new System.Drawing.Point(150, sy);
-            lblLastUnderrunLabel.Location = new System.Drawing.Point(250, sy);
-            lblLastUnderrun.Location = new System.Drawing.Point(320, sy);
+            configLayout.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.AutoSize));
+            chkExclusiveMode.Margin = new System.Windows.Forms.Padding(0, 8, 0, 0);
+            configLayout.Controls.Add(chkExclusiveMode, 0, row);
+            configLayout.SetColumnSpan(chkExclusiveMode, 2);
+            row++;
 
-            grpStats.Controls.AddRange(new System.Windows.Forms.Control[] {
-                lblConnectionStatusLabel, lblConnectionStatus, lblRemoteEndpointLabel, lblRemoteEndpoint,
-                lblAudioFormatLabel, lblAudioFormat, lblPacketsReceivedLabel, lblPacketsReceived,
-                lblBitrateLabel, lblBitrate, lblTotalLatencyLabel, lblTotalLatency,
-                grpNetworkBuffer, grpWasapiBuffer,
-                lblUnderrunsLabel, lblUnderruns, lblLastUnderrunLabel, lblLastUnderrun
-            });
-            this.Controls.Add(grpStats);
+            configLayout.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Percent, 100F));
+            var filler = new System.Windows.Forms.Panel { Dock = System.Windows.Forms.DockStyle.Fill };
+            configLayout.Controls.Add(filler, 0, row);
+            configLayout.SetColumnSpan(filler, 2);
 
-            // Logs group (bottom, full width)
-            y += 390;  // Augmenté de 360 à 390 pour correspondre à la nouvelle hauteur des groupes
-            grpLogs.Location = new System.Drawing.Point(margin, y);
-            grpLogs.Size = new System.Drawing.Size(this.ClientSize.Width - margin * 2, this.ClientSize.Height - y - margin);
-            grpLogs.Anchor = System.Windows.Forms.AnchorStyles.Left | System.Windows.Forms.AnchorStyles.Right | 
-                            System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Bottom;
+            grpConfig.Controls.Add(configLayout);
+            grpConfig.ResumeLayout(false);
+        }
 
-            cmbLogLevel.Location = new System.Drawing.Point(10, 25);
-            cmbLogLevel.Width = 100;
-            btnClearLogs.Location = new System.Drawing.Point(120, 25);
+        private void BuildStatsLayout()
+        {
+            grpStats.SuspendLayout();
+            grpStats.Controls.Clear();
+            grpStats.Dock = System.Windows.Forms.DockStyle.Fill;
+            grpStats.Padding = new System.Windows.Forms.Padding(12, 16, 12, 12);
 
-            txtLogs.Location = new System.Drawing.Point(10, 60);
-            txtLogs.Size = new System.Drawing.Size(grpLogs.Width - 20, grpLogs.Height - 70);
-            txtLogs.Anchor = System.Windows.Forms.AnchorStyles.Left | System.Windows.Forms.AnchorStyles.Right | 
-                            System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Bottom;
+            var statsLayout = new System.Windows.Forms.TableLayoutPanel();
+            statsLayout.ColumnCount = 2;
+            statsLayout.Dock = System.Windows.Forms.DockStyle.Fill;
+            statsLayout.AutoSize = true;
+            statsLayout.AutoSizeMode = System.Windows.Forms.AutoSizeMode.GrowAndShrink;
+            statsLayout.ColumnStyles.Add(new System.Windows.Forms.ColumnStyle(System.Windows.Forms.SizeType.AutoSize));
+            statsLayout.ColumnStyles.Add(new System.Windows.Forms.ColumnStyle(System.Windows.Forms.SizeType.Percent, 100F));
 
-            grpLogs.Controls.AddRange(new System.Windows.Forms.Control[] { cmbLogLevel, btnClearLogs, txtLogs });
-            this.Controls.Add(grpLogs);
+            int row = 0;
+
+            statsLayout.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.AutoSize));
+            lblConnectionStatusLabel.Margin = new System.Windows.Forms.Padding(0, 0, 8, 0);
+            lblConnectionStatus.Margin = new System.Windows.Forms.Padding(0, 0, 0, 0);
+            statsLayout.Controls.Add(lblConnectionStatusLabel, 0, row);
+            statsLayout.Controls.Add(lblConnectionStatus, 1, row);
+            row++;
+
+            statsLayout.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.AutoSize));
+            lblRemoteEndpointLabel.Margin = new System.Windows.Forms.Padding(0, 4, 8, 0);
+            lblRemoteEndpoint.Margin = new System.Windows.Forms.Padding(0, 4, 0, 0);
+            statsLayout.Controls.Add(lblRemoteEndpointLabel, 0, row);
+            statsLayout.Controls.Add(lblRemoteEndpoint, 1, row);
+            row++;
+
+            statsLayout.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.AutoSize));
+            lblAudioFormatLabel.Margin = new System.Windows.Forms.Padding(0, 4, 8, 0);
+            lblAudioFormat.Margin = new System.Windows.Forms.Padding(0, 4, 0, 0);
+            statsLayout.Controls.Add(lblAudioFormatLabel, 0, row);
+            statsLayout.Controls.Add(lblAudioFormat, 1, row);
+            row++;
+
+            statsLayout.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.AutoSize));
+            lblPacketsReceivedLabel.Margin = new System.Windows.Forms.Padding(0, 4, 8, 0);
+            lblPacketsReceived.Margin = new System.Windows.Forms.Padding(0, 4, 0, 0);
+            statsLayout.Controls.Add(lblPacketsReceivedLabel, 0, row);
+            statsLayout.Controls.Add(lblPacketsReceived, 1, row);
+            row++;
+
+            statsLayout.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.AutoSize));
+            lblBitrateLabel.Margin = new System.Windows.Forms.Padding(0, 4, 8, 0);
+            lblBitrate.Margin = new System.Windows.Forms.Padding(0, 4, 0, 0);
+            statsLayout.Controls.Add(lblBitrateLabel, 0, row);
+            statsLayout.Controls.Add(lblBitrate, 1, row);
+            row++;
+
+            statsLayout.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.AutoSize));
+            lblTotalLatencyLabel.Margin = new System.Windows.Forms.Padding(0, 4, 8, 0);
+            lblTotalLatency.Margin = new System.Windows.Forms.Padding(0, 4, 0, 0);
+            statsLayout.Controls.Add(lblTotalLatencyLabel, 0, row);
+            statsLayout.Controls.Add(lblTotalLatency, 1, row);
+            row++;
+
+            statsLayout.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Percent, 100F));
+            var bufferLayout = new System.Windows.Forms.TableLayoutPanel
+            {
+                ColumnCount = 2,
+                Dock = System.Windows.Forms.DockStyle.Fill,
+                Margin = new System.Windows.Forms.Padding(0, 16, 0, 0)
+            };
+            bufferLayout.ColumnStyles.Add(new System.Windows.Forms.ColumnStyle(System.Windows.Forms.SizeType.Percent, 50F));
+            bufferLayout.ColumnStyles.Add(new System.Windows.Forms.ColumnStyle(System.Windows.Forms.SizeType.Percent, 50F));
+
+            BuildBufferGroup(grpNetworkBuffer, progressNetworkBuffer, lblNetworkBuffer, lblNetworkBufferPercent, lblNetworkBufferStatus);
+            BuildBufferGroup(grpWasapiBuffer, progressWasapiBuffer, lblWasapiBuffer, lblWasapiBufferPercent, lblWasapiBufferStatus);
+
+            bufferLayout.Controls.Add(grpNetworkBuffer, 0, 0);
+            bufferLayout.Controls.Add(grpWasapiBuffer, 1, 0);
+            statsLayout.Controls.Add(bufferLayout, 0, row);
+            statsLayout.SetColumnSpan(bufferLayout, 2);
+            row++;
+
+            statsLayout.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.AutoSize));
+            var underrunLayout = new System.Windows.Forms.FlowLayoutPanel
+            {
+                AutoSize = true,
+                AutoSizeMode = System.Windows.Forms.AutoSizeMode.GrowAndShrink,
+                Dock = System.Windows.Forms.DockStyle.Fill,
+                FlowDirection = System.Windows.Forms.FlowDirection.LeftToRight,
+                WrapContents = false,
+                Margin = new System.Windows.Forms.Padding(0, 16, 0, 0)
+            };
+            lblUnderrunsLabel.Margin = new System.Windows.Forms.Padding(0, 0, 8, 0);
+            lblUnderruns.Margin = new System.Windows.Forms.Padding(0, 0, 16, 0);
+            lblLastUnderrunLabel.Margin = new System.Windows.Forms.Padding(0, 0, 8, 0);
+            lblLastUnderrun.Margin = new System.Windows.Forms.Padding(0, 0, 0, 0);
+            underrunLayout.Controls.Add(lblUnderrunsLabel);
+            underrunLayout.Controls.Add(lblUnderruns);
+            underrunLayout.Controls.Add(lblLastUnderrunLabel);
+            underrunLayout.Controls.Add(lblLastUnderrun);
+            statsLayout.Controls.Add(underrunLayout, 0, row);
+            statsLayout.SetColumnSpan(underrunLayout, 2);
+
+            grpStats.Controls.Add(statsLayout);
+            grpStats.ResumeLayout(false);
+        }
+        private void BuildBufferGroup(System.Windows.Forms.GroupBox groupBox, System.Windows.Forms.ProgressBar progressBar, System.Windows.Forms.Label valueLabel, System.Windows.Forms.Label percentLabel, System.Windows.Forms.Label statusLabel)
+        {
+            groupBox.SuspendLayout();
+            groupBox.Controls.Clear();
+            groupBox.Dock = System.Windows.Forms.DockStyle.Fill;
+            groupBox.Padding = new System.Windows.Forms.Padding(12);
+
+            var layout = new System.Windows.Forms.TableLayoutPanel
+            {
+                ColumnCount = 2,
+                Dock = System.Windows.Forms.DockStyle.Fill
+            };
+            layout.ColumnStyles.Add(new System.Windows.Forms.ColumnStyle(System.Windows.Forms.SizeType.Percent, 50F));
+            layout.ColumnStyles.Add(new System.Windows.Forms.ColumnStyle(System.Windows.Forms.SizeType.Percent, 50F));
+            layout.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.AutoSize));
+            layout.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.AutoSize));
+            layout.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.AutoSize));
+
+            progressBar.Dock = System.Windows.Forms.DockStyle.Fill;
+            progressBar.Height = 18;
+            progressBar.Style = System.Windows.Forms.ProgressBarStyle.Continuous;
+            layout.Controls.Add(progressBar, 0, 0);
+            layout.SetColumnSpan(progressBar, 2);
+
+            valueLabel.Margin = new System.Windows.Forms.Padding(0, 8, 0, 0);
+            percentLabel.Margin = new System.Windows.Forms.Padding(0, 8, 0, 0);
+            layout.Controls.Add(valueLabel, 0, 1);
+            layout.Controls.Add(percentLabel, 1, 1);
+
+            statusLabel.Margin = new System.Windows.Forms.Padding(0, 4, 0, 0);
+            layout.Controls.Add(statusLabel, 0, 2);
+            layout.SetColumnSpan(statusLabel, 2);
+
+            groupBox.Controls.Add(layout);
+            groupBox.ResumeLayout(false);
+        }
+
+        private void BuildLogsLayout()
+        {
+            grpLogs.SuspendLayout();
+            grpLogs.Controls.Clear();
+            grpLogs.Dock = System.Windows.Forms.DockStyle.Fill;
+            grpLogs.Padding = new System.Windows.Forms.Padding(12, 16, 12, 12);
+
+            var logsLayout = new System.Windows.Forms.TableLayoutPanel();
+            logsLayout.ColumnCount = 1;
+            logsLayout.Dock = System.Windows.Forms.DockStyle.Fill;
+            logsLayout.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.AutoSize));
+            logsLayout.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Percent, 100F));
+
+            var logToolbar = new System.Windows.Forms.FlowLayoutPanel
+            {
+                AutoSize = true,
+                AutoSizeMode = System.Windows.Forms.AutoSizeMode.GrowAndShrink,
+                Dock = System.Windows.Forms.DockStyle.Fill,
+                FlowDirection = System.Windows.Forms.FlowDirection.LeftToRight,
+                WrapContents = false
+            };
+
+            var lblLogLevel = new System.Windows.Forms.Label
+            {
+                Text = "Niveau:",
+                AutoSize = true,
+                Margin = new System.Windows.Forms.Padding(0, 6, 8, 0)
+            };
+
+            cmbLogLevel.Width = 140;
+            cmbLogLevel.Margin = new System.Windows.Forms.Padding(0, 0, 0, 0);
+            btnClearLogs.AutoSize = true;
+            btnClearLogs.Margin = new System.Windows.Forms.Padding(12, 0, 0, 0);
+
+            logToolbar.Controls.Add(lblLogLevel);
+            logToolbar.Controls.Add(cmbLogLevel);
+            logToolbar.Controls.Add(btnClearLogs);
+
+            logsLayout.Controls.Add(logToolbar, 0, 0);
+
+            txtLogs.Dock = System.Windows.Forms.DockStyle.Fill;
+            txtLogs.Margin = new System.Windows.Forms.Padding(0, 8, 0, 0);
+            logsLayout.Controls.Add(txtLogs, 0, 1);
+
+            grpLogs.Controls.Add(logsLayout);
+            grpLogs.ResumeLayout(false);
         }
     }
 }

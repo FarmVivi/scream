@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Drawing;
 using System.Windows.Forms;
 using System.Net;
@@ -26,6 +26,12 @@ namespace ScreamReader
         private System.Windows.Forms.Timer statsUpdateTimer;
         private bool isPlaying = false;
         private bool isAutoDetectFormat = true;
+        private readonly Color playButtonColor = Color.FromArgb(0, 126, 249);
+        private readonly Color playButtonHoverColor = Color.FromArgb(0, 102, 204);
+        private readonly Color playButtonDownColor = Color.FromArgb(0, 92, 184);
+        private readonly Color stopButtonColor = Color.FromArgb(224, 62, 54);
+        private readonly Color stopButtonHoverColor = Color.FromArgb(192, 57, 43);
+        private readonly Color stopButtonDownColor = Color.FromArgb(169, 50, 38);
 
         public AudioReceiverWindow()
         {
@@ -39,16 +45,16 @@ namespace ScreamReader
         {
             // Charger la configuration sauvegardée
             ConfigurationManager.Load();
-            
+
             // Appliquer la configuration
             currentConfig = ConfigurationManager.GetStreamConfiguration();
             LogManager.LogDebug($"[AudioReceiverWindow] Config après GetStreamConfiguration: {currentConfig}");
             UpdateConfigUI();
             UpdatePlayButton();
-            
+
             // Appliquer le niveau de log sauvegardé
             LogManager.SetMinimumLevel(ConfigurationManager.MinimumLogLevel);
-            
+
             // Configurer l'auto-détection de format (par défaut true)
             UpdateFormatControlsState();
         }
@@ -78,17 +84,17 @@ namespace ScreamReader
             {
                 this.Size = ConfigurationManager.WindowSize;
             }
-            
+
             if (ConfigurationManager.WindowLocation != Point.Empty)
             {
                 this.Location = ConfigurationManager.WindowLocation;
             }
-            
+
             if (ConfigurationManager.WindowMaximized)
             {
                 this.WindowState = FormWindowState.Maximized;
             }
-            
+
             LogManager.Log("ScreamReader Interface chargée");
             LogManager.LogInfo($"Configuration chargée: {currentConfig}");
         }
@@ -100,21 +106,21 @@ namespace ScreamReader
         {
             // Désactiver le comportement "minimize to tray"
             this.FormClosing -= OnFormClosing;
-            
+
             // Faire le cleanup
             SaveConfiguration();
             StopAudio();
-            
+
             if (audioPlayer != null)
             {
                 audioPlayer.Dispose();
                 audioPlayer = null;
             }
-            
+
             statsUpdateTimer?.Stop();
             statsUpdateTimer?.Dispose();
             LogManager.LogAdded -= OnLogAdded;
-            
+
             // Fermer réellement
             this.Close();
         }
@@ -131,22 +137,22 @@ namespace ScreamReader
 
             // Sauvegarder la configuration avant de fermer
             SaveConfiguration();
-            
+
             // Actual cleanup
             StopAudio();
-            
+
             // Nettoyer le player à la fermeture de l'application
             if (audioPlayer != null)
             {
                 audioPlayer.Dispose();
                 audioPlayer = null;
             }
-            
+
             statsUpdateTimer?.Stop();
             statsUpdateTimer?.Dispose();
             LogManager.LogAdded -= OnLogAdded;
         }
-        
+
         private void SaveConfiguration()
         {
             // Sauvegarder la position et taille de la fenêtre
@@ -160,13 +166,13 @@ namespace ScreamReader
             {
                 ConfigurationManager.WindowMaximized = true;
             }
-            
+
             // Sauvegarder la configuration du stream
             ConfigurationManager.UpdateFromStreamConfiguration(currentConfig);
-            
+
             // Sauvegarder le niveau de log
             ConfigurationManager.MinimumLogLevel = LogManager.GetMinimumLevel();
-            
+
             // Écrire dans le registre
             ConfigurationManager.Save();
         }
@@ -187,13 +193,13 @@ namespace ScreamReader
             // Add log with color
             int start = txtLogs.TextLength;
             txtLogs.AppendText(entry.ToString() + Environment.NewLine);
-            
+
             txtLogs.SelectionStart = start;
             txtLogs.SelectionLength = entry.ToString().Length;
             txtLogs.SelectionColor = entry.Color;
             txtLogs.SelectionLength = 0;
             txtLogs.SelectionStart = txtLogs.TextLength;
-            
+
             // Auto-scroll
             txtLogs.ScrollToCaret();
 
@@ -234,14 +240,14 @@ namespace ScreamReader
             {
                 lblRemoteEndpoint.Text = stats.RemoteEndpoint ?? "N/A";
                 lblAudioFormat.Text = stats.FormatDescription;
-                
+
                 // Mettre à jour le label de format détecté
                 if (isAutoDetectFormat)
                 {
                     lblDetectedFormat.Text = $"Détecté: {stats.FormatDescription}";
                     lblDetectedFormat.ForeColor = System.Drawing.Color.DarkGreen;
                 }
-                
+
                 lblPacketsReceived.Text = $"{stats.TotalPacketsReceived:N0} ({stats.PacketsPerSecond:F1}/s)";
                 lblBitrate.Text = $"{stats.Bitrate:F1} kbps";
                 lblTotalLatency.Text = $"{stats.TotalLatencyMs:F1} ms";
@@ -250,7 +256,7 @@ namespace ScreamReader
                 lblNetworkBuffer.Text = $"{stats.NetworkBufferedMs:F1}ms / {stats.NetworkBufferCapacityMs:F0}ms";
                 lblNetworkBufferPercent.Text = $"{stats.NetworkBufferFillPercentage:F0}%";
                 progressNetworkBuffer.Value = Math.Min(100, Math.Max(0, (int)stats.NetworkBufferFillPercentage));
-                
+
                 var networkHealth = GetBufferHealth(stats.NetworkBufferFillPercentage);
                 lblNetworkBufferStatus.Text = GetHealthDescription(networkHealth);
                 lblNetworkBufferStatus.ForeColor = GetHealthColor(networkHealth);
@@ -260,7 +266,7 @@ namespace ScreamReader
                 lblWasapiBuffer.Text = $"{stats.WasapiBufferedMs:F1}ms / {stats.WasapiBufferCapacityMs:F0}ms";
                 lblWasapiBufferPercent.Text = $"{stats.WasapiBufferFillPercentage:F0}%";
                 progressWasapiBuffer.Value = Math.Min(100, Math.Max(0, (int)stats.WasapiBufferFillPercentage));
-                
+
                 var wasapiHealth = GetBufferHealth(stats.WasapiBufferFillPercentage);
                 lblWasapiBufferStatus.Text = GetHealthDescription(wasapiHealth);
                 lblWasapiBufferStatus.ForeColor = GetHealthColor(wasapiHealth);
@@ -336,11 +342,11 @@ namespace ScreamReader
             {
                 // Lire la configuration depuis l'UI
                 ReadConfigFromUI();
-                
+
                 // Validate configuration
                 if (!currentConfig.IsValid(out string error))
                 {
-                    MessageBox.Show($"Configuration invalide: {error}", "Erreur", 
+                    MessageBox.Show($"Configuration invalide: {error}", "Erreur",
                         MessageBoxButtons.OK, MessageBoxIcon.Error);
                     return;
                 }
@@ -348,7 +354,7 @@ namespace ScreamReader
                 LogManager.Log($"Démarrage du flux audio: {currentConfig}");
 
                 // Ne recréer le player que si nécessaire (première fois ou changement de mode multicast/unicast)
-                bool needNewPlayer = audioPlayer == null || 
+                bool needNewPlayer = audioPlayer == null ||
                     (currentConfig.IsMulticast && !(audioPlayer is MulticastUdpWaveStreamPlayer)) ||
                     (!currentConfig.IsMulticast && !(audioPlayer is UnicastUdpWaveStreamPlayer));
 
@@ -389,11 +395,11 @@ namespace ScreamReader
                 {
                     // Réutilisation du player : appliquer les valeurs selon le mode (Auto/Manuel)
                     LogManager.LogDebug("[AudioReceiverWindow] Réutilisation du player existant");
-                    
+
                     // Si mode MANUEL : toujours appliquer la valeur de l'UI
                     // Si mode AUTO : garder les adaptations (ne rien faire)
                     bool isManualMode = !currentConfig.IsAutoBuffer || !currentConfig.IsAutoWasapi;
-                    
+
                     if (isManualMode)
                     {
                         // Mode manuel : appliquer les valeurs de l'UI à chaque Start
@@ -401,7 +407,7 @@ namespace ScreamReader
                             !currentConfig.IsAutoBuffer ? currentConfig.BufferDuration : -1,
                             !currentConfig.IsAutoWasapi ? currentConfig.WasapiLatency : -1
                         );
-                        
+
                         LogManager.LogInfo($"[AudioReceiverWindow] Mode manuel - Valeurs appliquées: Buffer={(!currentConfig.IsAutoBuffer ? currentConfig.BufferDuration + "ms" : "Auto")}, WASAPI={(!currentConfig.IsAutoWasapi ? currentConfig.WasapiLatency + "ms" : "Auto")}");
                     }
                     else
@@ -416,7 +422,7 @@ namespace ScreamReader
                 isPlaying = true;
                 UpdatePlayButton();
 
-                LogManager.LogInfo("✓ Lecture audio démarrée");
+                LogManager.LogInfo("Lecture audio démarrée");
             }
             catch (Exception ex)
             {
@@ -443,7 +449,7 @@ namespace ScreamReader
                 UpdatePlayButton();
                 ClearStats();
 
-                LogManager.LogInfo("✓ Lecture audio arrêtée (player préservé pour adaptations)");
+                LogManager.LogInfo("Lecture audio arrêtée (player préservé pour adaptations)");
             }
             catch (Exception ex)
             {
@@ -455,18 +461,21 @@ namespace ScreamReader
         {
             if (isPlaying)
             {
-                btnPlayStop.Text = "⏹ Stop";
-                btnPlayStop.BackColor = Color.IndianRed;
+                btnPlayStop.Text = "■ Arrêter";
+                btnPlayStop.BackColor = stopButtonColor;
+                btnPlayStop.FlatAppearance.MouseOverBackColor = stopButtonHoverColor;
+                btnPlayStop.FlatAppearance.MouseDownBackColor = stopButtonDownColor;
                 grpConfig.Enabled = false;
             }
             else
             {
-                btnPlayStop.Text = "▶ Start";
-                btnPlayStop.BackColor = Color.LightGreen;
+                btnPlayStop.Text = "▶ Démarrer";
+                btnPlayStop.BackColor = playButtonColor;
+                btnPlayStop.FlatAppearance.MouseOverBackColor = playButtonHoverColor;
+                btnPlayStop.FlatAppearance.MouseDownBackColor = playButtonDownColor;
                 grpConfig.Enabled = true;
             }
         }
-
         private void ClearStats()
         {
             lblConnectionStatus.Text = "✗ Déconnecté";
@@ -484,6 +493,8 @@ namespace ScreamReader
             lblWasapiBufferStatus.Text = "-";
             lblUnderruns.Text = "0";
             lblLastUnderrun.Text = "-";
+            lblDetectedFormat.Text = "Format détecté : en attente...";
+            lblDetectedFormat.ForeColor = Color.Gray;
             progressNetworkBuffer.Value = 0;
             progressWasapiBuffer.Value = 0;
         }
@@ -494,24 +505,24 @@ namespace ScreamReader
         {
             // Désactiver les événements pendant la mise à jour
             isUpdatingUI = true;
-            
+
             try
             {
                 txtIpAddress.Text = currentConfig.IpAddress.ToString();
                 numPort.Value = currentConfig.Port;
                 radioMulticast.Checked = currentConfig.IsMulticast;
                 radioUnicast.Checked = !currentConfig.IsMulticast;
-                
+
                 // Gérer les valeurs -1 (auto-detect) pour les contrôles de format
                 numBitWidth.Value = currentConfig.BitWidth > 0 ? currentConfig.BitWidth : 16;
                 numSampleRate.Value = currentConfig.SampleRate > 0 ? currentConfig.SampleRate : 48000;
                 numChannels.Value = currentConfig.Channels > 0 ? currentConfig.Channels : 2;
-                
+
                 // Auto-detection format
                 chkAutoDetectFormat.Checked = currentConfig.IsAutoDetectFormat;
                 isAutoDetectFormat = currentConfig.IsAutoDetectFormat;
                 UpdateFormatControlsState();
-                
+
                 // Auto buffer
                 if (currentConfig.BufferDuration == -1 || currentConfig.IsAutoBuffer)
                 {
@@ -580,7 +591,7 @@ namespace ScreamReader
             try
             {
                 ReadConfigFromUI();
-                
+
                 // Sauvegarder dans le registre
                 ConfigurationManager.UpdateFromStreamConfiguration(currentConfig);
                 ConfigurationManager.Save();
@@ -596,7 +607,7 @@ namespace ScreamReader
         {
             // Ignorer si on est en train de mettre à jour l'UI
             if (isUpdatingUI) return;
-            
+
             if (!isPlaying)
             {
                 SaveConfigFromUI();
@@ -606,7 +617,7 @@ namespace ScreamReader
         private void chkAutoBuffer_CheckedChanged(object sender, EventArgs e)
         {
             if (isUpdatingUI) return;
-            
+
             numBufferDuration.Enabled = !chkAutoBuffer.Checked;
             if (chkAutoBuffer.Checked)
             {
@@ -618,7 +629,7 @@ namespace ScreamReader
         private void chkAutoWasapi_CheckedChanged(object sender, EventArgs e)
         {
             if (isUpdatingUI) return;
-            
+
             numWasapiLatency.Enabled = !chkAutoWasapi.Checked;
             if (chkAutoWasapi.Checked)
             {
@@ -630,14 +641,14 @@ namespace ScreamReader
         private void chkAutoDetectFormat_CheckedChanged(object sender, EventArgs e)
         {
             if (isUpdatingUI) return;
-            
+
             isAutoDetectFormat = chkAutoDetectFormat.Checked;
             UpdateFormatControlsState();
-            
+
             if (isAutoDetectFormat)
             {
                 LogManager.LogInfo("Auto-détection de format activée");
-                lblDetectedFormat.Text = "Format détecté: en attente...";
+                lblDetectedFormat.Text = "Format détecté : en attente...";
                 lblDetectedFormat.ForeColor = System.Drawing.Color.Gray;
             }
             else
@@ -646,23 +657,23 @@ namespace ScreamReader
                 lblDetectedFormat.Text = "Mode manuel";
                 lblDetectedFormat.ForeColor = System.Drawing.Color.DarkOrange;
             }
-            
+
             // Sauvegarder dans tous les cas
             SaveConfigFromUI();
         }
-        
+
         private void UpdateFormatControlsState()
         {
             // Activer/désactiver les contrôles de format selon le mode
             bool enableManual = !isAutoDetectFormat;
-            
+
             lblBitWidth.Enabled = enableManual;
             numBitWidth.Enabled = enableManual;
             lblSampleRate.Enabled = enableManual;
             numSampleRate.Enabled = enableManual;
             lblChannels.Enabled = enableManual;
             numChannels.Enabled = enableManual;
-            
+
             // Changer la couleur des labels pour indiquer l'état
             Color labelColor = enableManual ? System.Drawing.Color.Black : System.Drawing.Color.Gray;
             lblBitWidth.ForeColor = labelColor;
@@ -675,7 +686,7 @@ namespace ScreamReader
             var level = (LogLevel)cmbLogLevel.SelectedIndex;
             LogManager.SetMinimumLevel(level);
             LogManager.LogInfo($"Niveau de log changé: {level}");
-            
+
             // Sauvegarder le niveau de log dans le registre
             ConfigurationManager.MinimumLogLevel = level;
             ConfigurationManager.Save();
@@ -686,7 +697,7 @@ namespace ScreamReader
             txtLogs.Clear();
             LogManager.Log("Logs effacés");
         }
-        
+
         /// <summary>
         /// Gestion du redimensionnement de la fenêtre pour ajuster les contrôles
         /// </summary>
@@ -697,14 +708,14 @@ namespace ScreamReader
             {
                 btnPlayStop.Left = (this.ClientSize.Width - btnPlayStop.Width) / 2;
             }
-            
+
             // Ajuster la largeur de grpStats pour s'adapter à la largeur de la fenêtre
             if (grpStats != null && grpConfig != null)
             {
                 int margin = 10;
                 grpStats.Width = this.ClientSize.Width - grpConfig.Right - margin * 2;
             }
-            
+
             // Ajuster les buffer boxes pour être côte à côte de manière égale
             if (grpNetworkBuffer != null && grpWasapiBuffer != null && grpStats != null)
             {
@@ -712,7 +723,7 @@ namespace ScreamReader
                 grpNetworkBuffer.Width = bufferWidth;
                 grpWasapiBuffer.Width = bufferWidth;
                 grpWasapiBuffer.Left = grpNetworkBuffer.Right + 10;
-                
+
                 // Ajuster la largeur des progress bars
                 if (progressNetworkBuffer != null)
                 {
@@ -726,3 +737,4 @@ namespace ScreamReader
         }
     }
 }
+
