@@ -62,12 +62,6 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="About.cs">
-      <SubType>Form</SubType>
-    </Compile>
-    <Compile Include="About.Designer.cs">
-      <DependentUpon>About.cs</DependentUpon>
-    </Compile>
     <Compile Include="AdaptiveBufferManager.cs" />
     <Compile Include="AudioReceiverWindow.cs">
       <SubType>Form</SubType>
@@ -84,9 +78,6 @@
     <Compile Include="StreamStats.cs" />
     <Compile Include="UdpWaveStreamPlayer.cs" />
     <Compile Include="UnicastUdpWaveStreamPlayer.cs" />
-    <EmbeddedResource Include="About.resx">
-      <DependentUpon>About.cs</DependentUpon>
-    </EmbeddedResource>
     <EmbeddedResource Include="Properties\Resources.resx">
       <Generator>ResXFileCodeGenerator</Generator>
       <LastGenOutput>Resources.Designer.cs</LastGenOutput>
