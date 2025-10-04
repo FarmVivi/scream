@@ -151,29 +151,44 @@ namespace ScreamReader
         {
             // Stocker les valeurs actuelles pour l'UI
             currentNetworkBufferedMs = bufferedMs;
-            currentNetworkBufferCapacityMs = bufferCapacityMs;
-            
-            var measurement = new BufferMeasurement
-            {
-                Timestamp = DateTime.Now,
-                BufferedMs = bufferedMs,
-                BufferCapacityMs = bufferCapacityMs,
-                FillPercentage = bufferedMs / bufferCapacityMs
-            };
+            currentNetworkBufferCapacityMs = Math.Max(bufferCapacityMs, 0);
 
-            recentMeasurements.Enqueue(measurement);
-            if (recentMeasurements.Count > MEASUREMENT_HISTORY_SIZE)
-                recentMeasurements.Dequeue();
-            
-            // Enregistrer dans l'historique long terme
-            RecordLongTermStats(bufferedMs, measurement.FillPercentage);
+            var measurement = CreateMeasurement(bufferedMs, bufferCapacityMs);
+
+            StoreMeasurement(measurement);
+
+            // Enregistrer dans l'historique long terme (même si capacité invalide, on garde la trace du niveau)
+            RecordLongTermStats(measurement.BufferedMs, measurement.FillPercentage);
 
             // Ne pas ajuster si l'utilisateur a spécifié des valeurs
             if (!IsAdaptive)
                 return;
 
             // Analyser et ajuster
-            AnalyzeAndAdjust(measurement, packetCount);
+            if (measurement.BufferCapacityMs > 0)
+            {
+                AnalyzeAndAdjust(measurement, packetCount);
+            }
+        }
+
+        private BufferMeasurement CreateMeasurement(double bufferedMs, int bufferCapacityMs)
+        {
+            return new BufferMeasurement
+            {
+                Timestamp = DateTime.Now,
+                BufferedMs = bufferedMs,
+                BufferCapacityMs = bufferCapacityMs,
+                FillPercentage = bufferCapacityMs > 0 ? bufferedMs / bufferCapacityMs : 0d
+            };
+        }
+
+        private void StoreMeasurement(BufferMeasurement measurement)
+        {
+            recentMeasurements.Enqueue(measurement);
+            if (recentMeasurements.Count > MEASUREMENT_HISTORY_SIZE)
+            {
+                recentMeasurements.Dequeue();
+            }
         }
         
         /// <summary>
@@ -197,6 +212,11 @@ namespace ScreamReader
         /// </summary>
         private void AnalyzeAndAdjust(BufferMeasurement current, int packetCount)
         {
+            if (current.BufferCapacityMs <= 0)
+            {
+                return;
+            }
+
             // Attendre au moins 2 secondes entre les ajustements pour laisser le système se stabiliser
             if ((DateTime.Now - lastAdjustmentTime).TotalSeconds < 2.0)
                 return;
