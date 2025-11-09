@@ -66,6 +66,26 @@ local channel_positions = {
     [0x20000] = "TOP_BACK_RIGHT"
 }
 
+-- Bitwise operations for Wireshark Lua compatibility
+-- (bit32 is not available in all Wireshark Lua environments)
+local function band(a, b)
+    local result = 0
+    local bitval = 1
+    while a > 0 and b > 0 do
+        if a % 2 == 1 and b % 2 == 1 then
+            result = result + bitval
+        end
+        bitval = bitval * 2
+        a = math.floor(a / 2)
+        b = math.floor(b / 2)
+    end
+    return result
+end
+
+local function rshift(value, shift)
+    return math.floor(value / (2 ^ shift))
+end
+
 -- Function to decode channel mask into human-readable string
 local function decode_channel_mask(mask)
     if mask == 0 then
@@ -74,7 +94,7 @@ local function decode_channel_mask(mask)
     
     local positions = {}
     for bit, name in pairs(channel_positions) do
-        if bit32.band(bit, mask) ~= 0 then
+        if band(bit, mask) ~= 0 then
             table.insert(positions, name)
         end
     end
@@ -88,8 +108,8 @@ end
 
 -- Function to calculate actual sample rate
 local function calculate_sample_rate(rate_byte)
-    local base_rate = bit32.rshift(bit32.band(rate_byte, 0x80), 7)
-    local multiplier = bit32.band(rate_byte, 0x7F)
+    local base_rate = rshift(band(rate_byte, 0x80), 7)
+    local multiplier = band(rate_byte, 0x7F)
     
     local base_hz = (base_rate == 0) and 48000 or 44100
     
