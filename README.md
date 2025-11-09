@@ -218,6 +218,13 @@ If so, run a IVSHMEM-capable receiver with the path of the SHM file
 as commandline parameter, for example:
 ```scream -m /dev/shm/scream-ivshmem```
 
+Wireshark Dissector
+-------------------------------------------------------------
+A Wireshark dissector is available for analyzing Scream audio
+packets. This is useful for debugging network issues or analyzing
+the audio stream. See the [wireshark directory](wireshark/) for
+installation instructions and usage details.
+
 Building
 -------------------------------------------------------------
 Visual Studio and a recent WDK are required. Good luck!
