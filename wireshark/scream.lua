@@ -74,7 +74,7 @@ local function decode_channel_mask(mask)
     
     local positions = {}
     for bit, name in pairs(channel_positions) do
-        if bit & mask ~= 0 then
+        if bit32.band(bit, mask) ~= 0 then
             table.insert(positions, name)
         end
     end
