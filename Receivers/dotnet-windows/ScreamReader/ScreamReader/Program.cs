@@ -1,73 +1,88 @@
-﻿using System;
-using System.Windows.Forms;
-
-namespace ScreamReader
+﻿namespace ScreamReader
 {
+    /// <summary>
+    /// ScreamReader - Modern Low-Latency Network Audio Receiver
+    /// </summary>
     static class Program
     {
         /// <summary>
-        /// The main entry point for the application.
+        /// Main entry point of the application
         /// </summary>
         [STAThread]
         static void Main()
         {
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
-            Application.Run(new ScreamReaderTray());
-        }
-    }
-
-
-    public class ScreamReaderTray : Form
-    {
-        protected internal NotifyIcon trayIcon;
-
-        protected ContextMenu trayMenu;
-
-        internal UdpWaveStreamPlayer udpPlayer;
-
-        private MainForm mainForm;
-
-        public ScreamReaderTray()
-        {
-            this.udpPlayer = new UdpWaveStreamPlayer();
-            this.udpPlayer.Start();
-            this.mainForm = new MainForm(this);
-            this.trayMenu = new ContextMenu();
-
-            this.trayIcon = new NotifyIcon();
-            this.trayIcon.Text = "ScreamReader";
-            this.trayIcon.Icon = Properties.Resources.speaker_ico;
-
-            // Add menu to tray icon and show it.
-            this.trayIcon.ContextMenu = trayMenu;
-            this.trayIcon.Visible = true;
-            this.trayIcon.DoubleClick += (object sender, EventArgs e) =>
+            
+            var version = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version;
+            LogManager.Log($"ScreamReader v{version}");
+            
+            // Check if this is first use (no config in registry)
+            bool isFirstRun = ConfigurationManager.IsFirstRun();
+            
+            var mainWindow = new AudioReceiverWindow();
+            
+            // Create system tray icon
+            var trayIcon = new NotifyIcon
             {
-                if (this.mainForm.Visible)
-                {
-                    this.mainForm.Focus();
-                    return;
-                }
-                this.mainForm.ShowDialog(this);
+                Icon = Properties.Resources.speaker_ico,
+                Text = "ScreamReader",
+                Visible = true
             };
-
-            trayMenu.MenuItems.Add("Exit", this.OnExit);
-        }
-
-        private void OnExit(object sender, EventArgs e)
-        {
-            this.udpPlayer.Dispose();
-            trayIcon.Visible = false;
-            Environment.Exit(0);
-        }
-
-        protected override void OnLoad(EventArgs e)
-        {
-            this.Visible = false;
-            this.ShowInTaskbar = false;
-
-            base.OnLoad(e);
+            
+            // Tray context menu
+            var trayMenu = new ContextMenuStrip();
+            trayMenu.Items.Add("Show", null, (s, e) =>
+            {
+                mainWindow.Show();
+                mainWindow.WindowState = FormWindowState.Normal;
+                mainWindow.BringToFront();
+            });
+            trayMenu.Items.Add("Hide", null, (s, e) => mainWindow.Hide());
+            trayMenu.Items.Add("-");
+            trayMenu.Items.Add("Exit", null, (s, e) =>
+            {
+                LogManager.LogInfo("Application shutdown requested");
+                trayIcon.Visible = false;
+                trayIcon.Dispose();
+                mainWindow.ForceClose(); // Complete shutdown with cleanup
+                Application.Exit();
+            });
+            trayIcon.ContextMenuStrip = trayMenu;
+            
+            // Double-click to show/restore window
+            trayIcon.DoubleClick += (s, e) =>
+            {
+                mainWindow.Show();
+                mainWindow.WindowState = FormWindowState.Normal;
+                mainWindow.BringToFront();
+            };
+            
+            // Handle application exit
+            Application.ApplicationExit += (s, e) =>
+            {
+                trayIcon.Visible = false;
+                trayIcon.Dispose();
+                mainWindow.Dispose();
+            };
+            
+            // Behavior on startup depending on config presence
+            if (isFirstRun)
+            {
+                // First use: show window without starting
+                LogManager.LogInfo("First use - Showing interface");
+                mainWindow.Show();
+            }
+            else
+            {
+                // Existing config: start automatically in background
+                LogManager.LogInfo("Configuration detected - Auto-starting in background");
+                mainWindow.StartAudioAutomatically();
+                // Do not call Show() - window stays hidden
+            }
+            
+            // Run application without showing main window by default
+            Application.Run();
         }
     }
 }
