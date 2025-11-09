@@ -173,7 +173,7 @@ local udp_table = DissectorTable.get("udp.port")
 udp_table:add(4010, scream_proto)
 
 -- Also allow for heuristic dissection (for custom ports)
-function scream_proto.heuristic_checker(buffer, pinfo, tree)
+local function heuristic_checker(buffer, pinfo, tree)
     -- Minimum packet size check
     if buffer:len() < 5 then
         return false
@@ -198,7 +198,7 @@ function scream_proto.heuristic_checker(buffer, pinfo, tree)
 end
 
 -- Register heuristic dissector
-scream_proto:register_heuristic("udp", scream_proto.heuristic_checker)
+scream_proto:register_heuristic("udp", heuristic_checker)
 
 -- Info message when loaded
 if gui_enabled() then
