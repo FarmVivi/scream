@@ -1,4 +1,5 @@
 using Microsoft.Win32;
+using System;
 using System.Drawing;
 using System.Net;
 using System.Runtime.Versioning;
@@ -48,29 +49,34 @@ namespace ScreamReader
         /// <summary>
         /// Checks if this is the first run (no config in registry)
         /// </summary>
-        [SupportedOSPlatform("windows")]
         public static bool IsFirstRun()
         {
+            RegistryKey key = null;
             try
             {
-                using RegistryKey key = Registry.CurrentUser.OpenSubKey(REGISTRY_KEY_PATH, false);
+                key = Registry.CurrentUser.OpenSubKey(REGISTRY_KEY_PATH, false);
                 return key == null; // First run if key doesn't exist
             }
             catch
             {
                 return true; // In case of error, consider it as first run
             }
+            finally
+            {
+                if (key != null)
+                    key.Dispose();
+            }
         }
 
         /// <summary>
         /// Loads configuration from registry
         /// </summary>
-        [SupportedOSPlatform("windows")]
         public static void Load()
         {
+            RegistryKey key = null;
             try
             {
-                using RegistryKey key = Registry.CurrentUser.OpenSubKey(REGISTRY_KEY_PATH, false);
+                key = Registry.CurrentUser.OpenSubKey(REGISTRY_KEY_PATH, false);
                 if (key == null)
                 {
                     LogManager.LogInfo("[Config] First run - Using default values");
@@ -123,17 +129,22 @@ namespace ScreamReader
             {
                 LogManager.LogError($"[Config] Error loading configuration: {ex.Message}");
             }
+            finally
+            {
+                if (key != null)
+                    key.Dispose();
+            }
         }
 
         /// <summary>
         /// Saves configuration to registry
         /// </summary>
-        [SupportedOSPlatform("windows")]
         public static void Save()
         {
+            RegistryKey key = null;
             try
             {
-                using RegistryKey key = Registry.CurrentUser.CreateSubKey(REGISTRY_KEY_PATH, true);
+                key = Registry.CurrentUser.CreateSubKey(REGISTRY_KEY_PATH, true);
                 if (key == null)
                 {
                     LogManager.LogError("[Config] Unable to create registry key");
@@ -176,12 +187,16 @@ namespace ScreamReader
             {
                 LogManager.LogError($"[Config] Error saving configuration: {ex.Message}");
             }
+            finally
+            {
+                if (key != null)
+                    key.Dispose();
+            }
         }
 
         /// <summary>
         /// Resets configuration to default values
         /// </summary>
-        [SupportedOSPlatform("windows")]
         public static void Reset()
         {
             try

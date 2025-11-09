@@ -1,4 +1,7 @@
-﻿namespace ScreamReader
+﻿using System;
+using System.Windows.Forms;
+
+namespace ScreamReader
 {
     /// <summary>
     /// ScreamReader - Modern Low-Latency Network Audio Receiver

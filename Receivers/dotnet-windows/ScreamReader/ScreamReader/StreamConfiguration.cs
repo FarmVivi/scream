@@ -78,43 +78,43 @@ namespace ScreamReader
         {
             if (IpAddress == null)
             {
-                error = "Adresse IP invalide";
+                error = "Invalid IP address";
                 return false;
             }
 
             if (Port < 1 || Port > 65535)
             {
-                error = "Port invalide (doit être entre 1 et 65535)";
+                error = "Invalid port (must be between 1 and 65535)";
                 return false;
             }
 
             if (BitWidth != 16 && BitWidth != 24 && BitWidth != 32)
             {
-                error = "Profondeur de bits invalide (16, 24 ou 32)";
+                error = "Invalid bit depth (16, 24 or 32)";
                 return false;
             }
 
             if (SampleRate < 8000 || SampleRate > 192000)
             {
-                error = "Fréquence d'échantillonnage invalide (8000-192000 Hz)";
+                error = "Invalid sample rate (8000-192000 Hz)";
                 return false;
             }
 
             if (Channels < 1 || Channels > 8)
             {
-                error = "Nombre de canaux invalide (1-8)";
+                error = "Invalid number of channels (1-8)";
                 return false;
             }
 
             if (BufferDuration != -1 && (BufferDuration < 1 || BufferDuration > 1000))
             {
-                error = "Durée de buffer invalide (1-1000 ms ou -1 pour auto)";
+                error = "Invalid buffer duration (1-1000 ms or -1 for auto)";
                 return false;
             }
 
             if (WasapiLatency != -1 && (WasapiLatency < 1 || WasapiLatency > 1000))
             {
-                error = "Latence WASAPI invalide (1-1000 ms ou -1 pour auto)";
+                error = "Invalid WASAPI latency (1-1000 ms or -1 for auto)";
                 return false;
             }
 
