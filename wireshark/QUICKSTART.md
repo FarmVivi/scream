@@ -1,4 +1,4 @@
-# Quick Reference - SCReAM Wireshark Dissector
+# Quick Reference - Scream Wireshark Dissector
 
 ## Installation (Quick)
 
@@ -19,12 +19,12 @@ cp scream.lua ~/.local/lib/wireshark/plugins/
 
 1. **Capture Filter:** `udp port 4010`
 2. **Display Filter:** `scream`
-3. Look for "SCReAM" in the Protocol column
+3. Look for "Scream" in the Protocol column
 
 ## Common Display Filters
 
 ```
-scream                                    # All SCReAM packets
+scream                                    # All Scream packets
 scream.channels == 2                      # Stereo only
 scream.sample_size == 16                  # 16-bit audio only
 scream.sample_rate_calculated contains "48000"  # 48kHz only
@@ -68,7 +68,7 @@ scream.audio_data_size > 1000             # Large packets only
 - Console: View → Show Console (check for errors)
 
 **Using custom port?**
-- Right-click packet → Decode As... → SCReAM
+- Right-click packet → Decode As... → Scream
 
 ## Channel Mask Quick Reference
 
@@ -83,4 +83,4 @@ scream.audio_data_size > 1000             # Large packets only
 
 - Full documentation: [README.md](README.md)
 - Packet examples: [EXAMPLES.md](EXAMPLES.md)
-- SCReAM project: https://github.com/duncanthrax/scream
+- Scream project: https://github.com/duncanthrax/scream

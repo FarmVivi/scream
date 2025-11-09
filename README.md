@@ -220,7 +220,7 @@ as commandline parameter, for example:
 
 Wireshark Dissector
 -------------------------------------------------------------
-A Wireshark dissector is available for analyzing SCReAM audio
+A Wireshark dissector is available for analyzing Scream audio
 packets. This is useful for debugging network issues or analyzing
 the audio stream. See the [wireshark directory](wireshark/) for
 installation instructions and usage details.

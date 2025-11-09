@@ -1,8 +1,8 @@
 -- Scream Audio Protocol Dissector for Wireshark
--- This dissector decodes SCReAM virtual audio device packets
+-- This dissector decodes Scream virtual audio device packets
 --
 -- Protocol Description:
--- SCReAM is a virtual sound device for Windows that publishes audio
+-- Scream is a virtual sound device for Windows that publishes audio
 -- as PCM multicast/unicast streams over UDP (default port 4010).
 --
 -- Packet Structure:
@@ -16,7 +16,7 @@
 -- - Bytes 5+: Raw PCM audio data
 
 -- Create the protocol
-local scream_proto = Proto("scream", "SCReAM Audio Protocol")
+local scream_proto = Proto("scream", "Scream Audio Protocol")
 
 -- Define protocol fields
 local f_sample_rate_raw = ProtoField.uint8("scream.sample_rate_raw", "Sample Rate (Raw)", base.HEX)
@@ -117,10 +117,10 @@ function scream_proto.dissector(buffer, pinfo, tree)
     end
     
     -- Set protocol column
-    pinfo.cols.protocol = "SCReAM"
+    pinfo.cols.protocol = "Scream"
     
     -- Create protocol tree
-    local subtree = tree:add(scream_proto, buffer(), "SCReAM Audio Protocol")
+    local subtree = tree:add(scream_proto, buffer(), "Scream Audio Protocol")
     
     -- Parse header (5 bytes)
     local sample_rate_raw = buffer(0, 1):uint()
@@ -161,14 +161,14 @@ function scream_proto.dissector(buffer, pinfo, tree)
     
     -- Update info column with summary
     pinfo.cols.info = string.format(
-        "SCReAM Audio: %d Hz, %d-bit, %d ch, %d bytes",
+        "Scream Audio: %d Hz, %d-bit, %d ch, %d bytes",
         actual_rate, sample_size, channels, audio_size
     )
     
     return buffer:len()
 end
 
--- Register the dissector for UDP port 4010 (default SCReAM port)
+-- Register the dissector for UDP port 4010 (default Scream port)
 local udp_table = DissectorTable.get("udp.port")
 udp_table:add(4010, scream_proto)
 
@@ -179,7 +179,7 @@ function scream_proto.heuristic_checker(buffer, pinfo, tree)
         return false
     end
     
-    -- Check if this looks like a SCReAM packet
+    -- Check if this looks like a Scream packet
     -- Sample size should be reasonable (8, 16, 24, or 32 bits typically)
     local sample_size = buffer(1, 1):uint()
     if sample_size < 8 or sample_size > 32 then
@@ -204,20 +204,20 @@ scream_proto:register_heuristic("udp", scream_proto.heuristic_checker)
 if gui_enabled() then
     local function show_info()
         local msg = [[
-SCReAM Audio Protocol Dissector loaded successfully!
+Scream Audio Protocol Dissector loaded successfully!
 
-This dissector decodes SCReAM virtual audio packets (default UDP port 4010).
+This dissector decodes Scream virtual audio packets (default UDP port 4010).
 
 To use:
-1. Capture UDP traffic on port 4010 (or the configured SCReAM port)
-2. The dissector will automatically decode SCReAM packets
-3. Look for "SCReAM" in the protocol column
+1. Capture UDP traffic on port 4010 (or the configured Scream port)
+2. The dissector will automatically decode Scream packets
+3. Look for "Scream" in the protocol column
 
-For more information about SCReAM, visit:
+For more information about Scream, visit:
 https://github.com/duncanthrax/scream
         ]]
         -- This would show a dialog, but we'll just print to console
-        print("SCReAM dissector loaded")
+        print("Scream dissector loaded")
     end
     show_info()
 end

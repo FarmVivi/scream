@@ -1,10 +1,10 @@
-# SCReAM Packet Examples
+# Scream Packet Examples
 
-This document provides examples of SCReAM packet structures to help understand how the protocol works.
+This document provides examples of Scream packet structures to help understand how the protocol works.
 
 ## Packet Format
 
-Every SCReAM packet consists of:
+Every Scream packet consists of:
 - 5-byte header
 - Variable length PCM audio data (typically 1152 bytes)
 
@@ -122,13 +122,13 @@ For different configurations:
 
 ## UDP Packet Example
 
-A typical SCReAM UDP packet on the network would look like:
+A typical Scream UDP packet on the network would look like:
 
 ```
 Ethernet Header
 IPv4 Header (dst: 239.255.77.77 for multicast)
 UDP Header (dst port: 4010)
-SCReAM Data:
+Scream Data:
   00 10 02 03 00  [5-byte header]
   A4 B2 C3 D1 ... [1152 bytes of PCM audio data]
 ```
@@ -141,7 +141,7 @@ To test the dissector with these examples:
 ```python
 from scapy.all import *
 
-# Create a SCReAM packet (stereo, 48kHz, 16-bit)
+# Create a Scream packet (stereo, 48kHz, 16-bit)
 scream_header = bytes([0x00, 0x10, 0x02, 0x03, 0x00])
 scream_audio = bytes([0x00] * 1152)  # Silent audio
 scream_packet = scream_header + scream_audio
@@ -153,7 +153,7 @@ pkt = IP(dst="239.255.77.77")/UDP(sport=12345, dport=4010)/Raw(load=scream_packe
 wrpcap("scream_test.pcap", pkt)
 ```
 
-2. Open the pcap file in Wireshark with the SCReAM dissector loaded
+2. Open the pcap file in Wireshark with the Scream dissector loaded
 3. The packet should be decoded and show all fields correctly
 
 ## Sample Rate Encoding Reference

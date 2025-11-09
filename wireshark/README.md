@@ -1,17 +1,17 @@
-# Wireshark Dissector for SCReAM Audio Protocol
+# Wireshark Dissector for Scream Audio Protocol
 
-This directory contains a Wireshark dissector for analyzing SCReAM (Scream) audio packets. The dissector allows you to inspect and analyze the audio stream packets in Wireshark for debugging and analysis purposes.
+This directory contains a Wireshark dissector for analyzing Scream (Scream) audio packets. The dissector allows you to inspect and analyze the audio stream packets in Wireshark for debugging and analysis purposes.
 
-## What is SCReAM?
+## What is Scream?
 
-SCReAM is a virtual audio device driver for Windows that publishes audio as PCM multicast/unicast streams over UDP. The default configuration uses:
+Scream is a virtual audio device driver for Windows that publishes audio as PCM multicast/unicast streams over UDP. The default configuration uses:
 - **Multicast address**: 239.255.77.77
 - **UDP port**: 4010
 - **Protocol**: Raw PCM audio with a 5-byte header
 
 ## Packet Structure
 
-Each SCReAM packet consists of:
+Each Scream packet consists of:
 
 ### Header (5 bytes)
 1. **Byte 0 - Sample Rate** (encoded):
@@ -71,22 +71,22 @@ wireshark -X lua_script:scream.lua
 
 ### Basic Capture
 
-1. **Start capturing** on the network interface where SCReAM traffic is expected
+1. **Start capturing** on the network interface where Scream traffic is expected
 
 2. **Apply a capture filter** (optional but recommended):
    ```
    udp port 4010
    ```
 
-3. **Start your SCReAM audio stream** from the Windows machine
+3. **Start your Scream audio stream** from the Windows machine
 
-4. **Look for packets** with "SCReAM" in the Protocol column
+4. **Look for packets** with "Scream" in the Protocol column
 
 ### Display Filters
 
 Once capturing, you can use these display filters:
 
-- Show all SCReAM packets:
+- Show all Scream packets:
   ```
   scream
   ```
@@ -137,14 +137,14 @@ The dissector provides detailed information for each packet:
 3. Make sure the file has `.lua` extension
 4. Try reloading Lua plugins (Ctrl+Shift+L)
 
-**SCReAM packets not recognized:**
+**Scream packets not recognized:**
 1. Verify you're capturing on the correct network interface
-2. Check if SCReAM is using a non-standard port (check Windows registry)
+2. Check if Scream is using a non-standard port (check Windows registry)
 3. The dissector automatically registers for port 4010 and includes heuristic detection
 
 **Custom port configuration:**
-If your SCReAM setup uses a different port, you can:
-1. Decode as SCReAM: Right-click a packet → Decode As → select SCReAM protocol
+If your Scream setup uses a different port, you can:
+1. Decode as Scream: Right-click a packet → Decode As → select Scream protocol
 2. Or modify the `scream.lua` file and add your port:
    ```lua
    udp_table:add(YOUR_PORT, scream_proto)
@@ -184,7 +184,7 @@ Common configurations:
 
 ### Example 1: Basic Stereo Stream
 ```
-Packet: SCReAM Audio: 48000 Hz, 16-bit, 2 ch, 1152 bytes
+Packet: Scream Audio: 48000 Hz, 16-bit, 2 ch, 1152 bytes
 ├─ Header
 │  ├─ Sample Rate (Raw): 0x00
 │  │  ├─ Base Rate: 48 kHz
@@ -201,7 +201,7 @@ Packet: SCReAM Audio: 48000 Hz, 16-bit, 2 ch, 1152 bytes
 
 ### Example 2: 5.1 Surround Stream
 ```
-Packet: SCReAM Audio: 48000 Hz, 24-bit, 6 ch, 1152 bytes
+Packet: Scream Audio: 48000 Hz, 24-bit, 6 ch, 1152 bytes
 ├─ Header
 │  ├─ Sample Rate: 48000 Hz
 │  ├─ Sample Size: 24 bits
@@ -215,28 +215,28 @@ Packet: SCReAM Audio: 48000 Hz, 24-bit, 6 ch, 1152 bytes
 ## Advanced Features
 
 ### Heuristic Detection
-The dissector includes heuristic detection, which means it can identify SCReAM packets even on non-standard ports. The heuristic checks:
+The dissector includes heuristic detection, which means it can identify Scream packets even on non-standard ports. The heuristic checks:
 - Minimum packet size (5 bytes)
 - Reasonable sample size (8-32 bits)
 - Reasonable channel count (1-8)
 
 ### Statistics
-You can use Wireshark's Statistics menu to analyze SCReAM traffic:
-- **Statistics → Protocol Hierarchy**: See how much SCReAM traffic you're capturing
-- **Statistics → Conversations**: Analyze UDP conversations carrying SCReAM data
-- **Statistics → IO Graph**: Visualize SCReAM packet rate and throughput
+You can use Wireshark's Statistics menu to analyze Scream traffic:
+- **Statistics → Protocol Hierarchy**: See how much Scream traffic you're capturing
+- **Statistics → Conversations**: Analyze UDP conversations carrying Scream data
+- **Statistics → IO Graph**: Visualize Scream packet rate and throughput
 
 ## Contributing
 
-If you find issues or want to improve the dissector, please contribute to the SCReAM project:
+If you find issues or want to improve the dissector, please contribute to the Scream project:
 https://github.com/duncanthrax/scream
 
 ## License
 
-This dissector follows the same license as the SCReAM project (MS-PL).
+This dissector follows the same license as the Scream project (MS-PL).
 
 ## References
 
-- [SCReAM GitHub Repository](https://github.com/duncanthrax/scream)
+- [Scream GitHub Repository](https://github.com/duncanthrax/scream)
 - [Wireshark Lua API Documentation](https://www.wireshark.org/docs/wsdg_html_chunked/wsluarm.html)
 - [Microsoft WAVEFORMATEXTENSIBLE](https://docs.microsoft.com/en-us/windows/win32/api/mmreg/ns-mmreg-waveformatextensible)
