@@ -1,0 +1,31 @@
+[Unit]
+Description=Scream Linux Audio Sender (PipeWire)
+After=pipewire.service pipewire-pulse.service
+Wants=pipewire.service
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/scream-tx \
+  --dest-ip=${SCREAM_TX_DEST_IP} \
+  --dest-port=${SCREAM_TX_DEST_PORT} \
+  --bind-ip=${SCREAM_TX_BIND_IP} \
+  --bind-port=${SCREAM_TX_BIND_PORT} \
+  --ttl=${SCREAM_TX_TTL} \
+  --dscp=${SCREAM_TX_DSCP} \
+  --silence-threshold-samples=${SCREAM_TX_SILENCE_THRESHOLD_SAMPLES} \
+  --sink-name=${SCREAM_TX_SINK_NAME} \
+  --stream-name=${SCREAM_TX_STREAM_NAME}
+Restart=on-failure
+RestartSec=2
+Environment=SCREAM_TX_DEST_IP=239.255.77.77
+Environment=SCREAM_TX_DEST_PORT=4010
+Environment=SCREAM_TX_BIND_IP=0.0.0.0
+Environment=SCREAM_TX_BIND_PORT=0
+Environment=SCREAM_TX_TTL=0
+Environment=SCREAM_TX_DSCP=0
+Environment=SCREAM_TX_SILENCE_THRESHOLD_SAMPLES=0
+Environment=SCREAM_TX_SINK_NAME=scream_tx_sink
+Environment="SCREAM_TX_STREAM_NAME=Scream TX"
+
+[Install]
+WantedBy=default.target

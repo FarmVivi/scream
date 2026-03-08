@@ -66,9 +66,9 @@ The installation methods above will not work on Windows 11, as the installation 
 
 Receivers
 ---------------------------------------------------------------
-- Unix with Pulseaudio, JACK or ALSA: Not included in the installer package.
-Please see [the README in the Receivers/unix folder](https://github.com/duncanthrax/scream/tree/master/Receivers/unix).
-Various contributors have written code for this receiver:
+- Unix receiver with Pulseaudio, JACK or ALSA, and Linux sender (`scream-tx`, PipeWire native):
+  Not included in the installer package. Please see [the README in the Receivers/unix folder](https://github.com/duncanthrax/scream/tree/master/Receivers/unix).
+  Various contributors have written code for the Unix receiver:
     * @roovio: JACK support.
     * @ivan: Original ALSA code.
     * @martinellimarco: IVSHMEM support.
