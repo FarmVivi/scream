@@ -113,6 +113,8 @@ Default multicast sender:
 $ scream-tx --verbose
 ```
 
+Default sender format is stereo, 16-bit, 48kHz.
+
 Unicast sender example:
 
 ```shell
@@ -130,6 +132,9 @@ $ scream-tx \
   --ttl 1 \
   --dscp 46 \
   --silence-threshold-samples 10000 \
+  --sample-rate 48000 \
+  --sample-size 16 \
+  --channels 2 \
   --sink-name scream_tx_sink \
   --stream-name "Scream TX" \
   --verbose
@@ -146,6 +151,9 @@ Every sender CLI option has an env equivalent:
 - `SCREAM_TX_TTL`
 - `SCREAM_TX_DSCP`
 - `SCREAM_TX_SILENCE_THRESHOLD_SAMPLES`
+- `SCREAM_TX_SAMPLE_RATE`
+- `SCREAM_TX_SAMPLE_SIZE`
+- `SCREAM_TX_CHANNELS`
 - `SCREAM_TX_SINK_NAME`
 - `SCREAM_TX_STREAM_NAME`
 - `SCREAM_TX_VERBOSE`

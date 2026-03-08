@@ -19,6 +19,9 @@ typedef struct tx_app_config {
   uint8_t ttl;
   uint8_t dscp;
   uint32_t silence_threshold_samples;
+  uint32_t sample_rate;
+  uint8_t sample_size;
+  uint8_t channels;
   char sink_name[128];
   char stream_name[128];
   int verbose;
@@ -41,6 +44,9 @@ enum {
   OPT_TTL,
   OPT_DSCP,
   OPT_SILENCE_THRESHOLD,
+  OPT_SAMPLE_RATE,
+  OPT_SAMPLE_SIZE,
+  OPT_CHANNELS,
   OPT_SINK_NAME,
   OPT_STREAM_NAME,
   OPT_VERBOSE
@@ -54,6 +60,9 @@ static const struct option tx_long_options[] = {
   { "ttl", required_argument, NULL, OPT_TTL },
   { "dscp", required_argument, NULL, OPT_DSCP },
   { "silence-threshold-samples", required_argument, NULL, OPT_SILENCE_THRESHOLD },
+  { "sample-rate", required_argument, NULL, OPT_SAMPLE_RATE },
+  { "sample-size", required_argument, NULL, OPT_SAMPLE_SIZE },
+  { "channels", required_argument, NULL, OPT_CHANNELS },
   { "sink-name", required_argument, NULL, OPT_SINK_NAME },
   { "stream-name", required_argument, NULL, OPT_STREAM_NAME },
   { "verbose", no_argument, NULL, OPT_VERBOSE },
@@ -75,6 +84,9 @@ static void tx_show_usage(const char *argv0)
   fprintf(stderr, "  --ttl <0-255>                        TTL (0 disables explicit TTL)\n");
   fprintf(stderr, "  --dscp <0-63>                        DSCP value for IP_TOS\n");
   fprintf(stderr, "  --silence-threshold-samples <n>      Silence suppression threshold in samples (0 disables)\n");
+  fprintf(stderr, "  --sample-rate <Hz>                   Audio sample rate (default 48000)\n");
+  fprintf(stderr, "  --sample-size <16|24|32>             Audio sample size in bits (default 16)\n");
+  fprintf(stderr, "  --channels <1-8>                     Channel count (default 2)\n");
   fprintf(stderr, "  --sink-name <name>                   Virtual PipeWire sink name\n");
   fprintf(stderr, "  --stream-name <name>                 PipeWire stream/client name\n");
   fprintf(stderr, "  --verbose                            Verbose logging\n");
@@ -88,6 +100,9 @@ static void tx_show_usage(const char *argv0)
   fprintf(stderr, "  SCREAM_TX_TTL\n");
   fprintf(stderr, "  SCREAM_TX_DSCP\n");
   fprintf(stderr, "  SCREAM_TX_SILENCE_THRESHOLD_SAMPLES\n");
+  fprintf(stderr, "  SCREAM_TX_SAMPLE_RATE\n");
+  fprintf(stderr, "  SCREAM_TX_SAMPLE_SIZE\n");
+  fprintf(stderr, "  SCREAM_TX_CHANNELS\n");
   fprintf(stderr, "  SCREAM_TX_SINK_NAME\n");
   fprintf(stderr, "  SCREAM_TX_STREAM_NAME\n");
   fprintf(stderr, "  SCREAM_TX_VERBOSE\n");
@@ -132,6 +147,21 @@ static int tx_parse_u32(const char *str, uint32_t min, uint32_t max, uint32_t *o
 
   *out = (uint32_t)value;
   return 0;
+}
+
+static int tx_parse_sample_size_u32(uint32_t value, uint8_t *out, const char *field)
+{
+  if (out == NULL || field == NULL) {
+    return -1;
+  }
+
+  if (value == 16u || value == 24u || value == 32u) {
+    *out = (uint8_t)value;
+    return 0;
+  }
+
+  fprintf(stderr, "Invalid %s: %u (expected 16, 24 or 32)\n", field, value);
+  return -1;
 }
 
 static int tx_load_numeric_env(
@@ -210,6 +240,32 @@ static int tx_load_environment(tx_app_config_t *cfg)
   }
   cfg->silence_threshold_samples = parsed;
 
+  parsed = 0u;
+  if (tx_load_numeric_env("SCREAM_TX_SAMPLE_RATE", 1u, UINT32_MAX, &parsed) != 0) {
+    return -1;
+  }
+  if (parsed != 0u) {
+    cfg->sample_rate = parsed;
+  }
+
+  parsed = 0u;
+  if (tx_load_numeric_env("SCREAM_TX_SAMPLE_SIZE", 16u, 32u, &parsed) != 0) {
+    return -1;
+  }
+  if (parsed != 0u) {
+    if (tx_parse_sample_size_u32(parsed, &cfg->sample_size, "SCREAM_TX_SAMPLE_SIZE") != 0) {
+      return -1;
+    }
+  }
+
+  parsed = 0u;
+  if (tx_load_numeric_env("SCREAM_TX_CHANNELS", 1u, 8u, &parsed) != 0) {
+    return -1;
+  }
+  if (parsed != 0u) {
+    cfg->channels = (uint8_t)parsed;
+  }
+
   value = getenv("SCREAM_TX_SINK_NAME");
   if (value != NULL && value[0] != '\0') {
     if (tx_copy_string(cfg->sink_name, sizeof(cfg->sink_name), value, "SCREAM_TX_SINK_NAME") != 0) {
@@ -245,6 +301,9 @@ static void tx_set_default_config(tx_app_config_t *cfg)
   cfg->ttl = 0u;
   cfg->dscp = 0u;
   cfg->silence_threshold_samples = 0u;
+  cfg->sample_rate = 48000u;
+  cfg->sample_size = 16u;
+  cfg->channels = 2u;
   memcpy(cfg->sink_name, "scream_tx_sink", sizeof("scream_tx_sink"));
   memcpy(cfg->stream_name, "Scream TX", sizeof("Scream TX"));
   cfg->verbose = 0;
@@ -301,6 +360,29 @@ static int tx_parse_cli(int argc, char **argv, tx_app_config_t *cfg)
           return -1;
         }
         cfg->silence_threshold_samples = parsed;
+        break;
+      case OPT_SAMPLE_RATE:
+        if (tx_parse_u32(optarg, 1u, UINT32_MAX, &parsed) != 0) {
+          fprintf(stderr, "Invalid --sample-rate: %s\n", optarg);
+          return -1;
+        }
+        cfg->sample_rate = parsed;
+        break;
+      case OPT_SAMPLE_SIZE:
+        if (tx_parse_u32(optarg, 16u, 32u, &parsed) != 0) {
+          fprintf(stderr, "Invalid --sample-size: %s\n", optarg);
+          return -1;
+        }
+        if (tx_parse_sample_size_u32(parsed, &cfg->sample_size, "--sample-size") != 0) {
+          return -1;
+        }
+        break;
+      case OPT_CHANNELS:
+        if (tx_parse_u32(optarg, 1u, 8u, &parsed) != 0) {
+          fprintf(stderr, "Invalid --channels: %s\n", optarg);
+          return -1;
+        }
+        cfg->channels = (uint8_t)parsed;
         break;
       case OPT_SINK_NAME:
         if (tx_copy_string(cfg->sink_name, sizeof(cfg->sink_name), optarg, "--sink-name") != 0) {
@@ -386,6 +468,7 @@ int main(int argc, char **argv)
   tx_runtime_t runtime;
   tx_udp_config_t udp_cfg;
   tx_pipewire_config_t pw_cfg;
+  tx_audio_format_t requested_format;
   int rc;
 
   tx_set_default_config(&cfg);
@@ -395,6 +478,25 @@ int main(int argc, char **argv)
   if (tx_parse_cli(argc, argv, &cfg) != 0) {
     tx_show_usage(argv[0]);
     return 1;
+  }
+
+  requested_format.sample_rate = cfg.sample_rate;
+  requested_format.sample_size = cfg.sample_size;
+  requested_format.channels = cfg.channels;
+  requested_format.channel_map = tx_protocol_default_channel_map(cfg.channels);
+  if (tx_protocol_validate_format(&requested_format) != 0) {
+    fprintf(stderr,
+      "Invalid sender format. Supported rates: 44100, 48000, 88200, 96000, 192000 Hz; "
+      "sample sizes: 16/24/32; channels: 1..8.\n");
+    return 1;
+  }
+
+  if (cfg.verbose > 0) {
+    fprintf(stderr,
+      "Configured TX format: %u Hz, %u-bit, %u ch\n",
+      cfg.sample_rate,
+      cfg.sample_size,
+      cfg.channels);
   }
 
   memset(&runtime, 0, sizeof(runtime));
@@ -422,6 +524,9 @@ int main(int argc, char **argv)
 
   pw_cfg.sink_name = cfg.sink_name;
   pw_cfg.stream_name = cfg.stream_name;
+  pw_cfg.sample_rate = cfg.sample_rate;
+  pw_cfg.sample_size = cfg.sample_size;
+  pw_cfg.channels = cfg.channels;
   pw_cfg.verbose = cfg.verbose;
 
   rc = tx_pipewire_run(&pw_cfg, tx_on_audio, &runtime);

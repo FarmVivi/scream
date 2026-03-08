@@ -13,6 +13,9 @@ ExecStart=/usr/bin/scream-tx \
   --ttl=${SCREAM_TX_TTL} \
   --dscp=${SCREAM_TX_DSCP} \
   --silence-threshold-samples=${SCREAM_TX_SILENCE_THRESHOLD_SAMPLES} \
+  --sample-rate=${SCREAM_TX_SAMPLE_RATE} \
+  --sample-size=${SCREAM_TX_SAMPLE_SIZE} \
+  --channels=${SCREAM_TX_CHANNELS} \
   --sink-name=${SCREAM_TX_SINK_NAME} \
   --stream-name=${SCREAM_TX_STREAM_NAME}
 Restart=on-failure
@@ -24,6 +27,9 @@ Environment=SCREAM_TX_BIND_PORT=0
 Environment=SCREAM_TX_TTL=0
 Environment=SCREAM_TX_DSCP=0
 Environment=SCREAM_TX_SILENCE_THRESHOLD_SAMPLES=0
+Environment=SCREAM_TX_SAMPLE_RATE=48000
+Environment=SCREAM_TX_SAMPLE_SIZE=16
+Environment=SCREAM_TX_CHANNELS=2
 Environment=SCREAM_TX_SINK_NAME=scream_tx_sink
 Environment="SCREAM_TX_STREAM_NAME=Scream TX"
 

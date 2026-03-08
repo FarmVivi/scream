@@ -112,6 +112,125 @@ static size_t tx_pipewire_input_bytes_per_sample(enum spa_audio_format format)
   }
 }
 
+static enum spa_audio_format tx_pipewire_spa_format_for_sample_size(uint8_t sample_size)
+{
+  switch (sample_size) {
+    case 16u:
+      return SPA_AUDIO_FORMAT_S16_LE;
+    case 24u:
+      return SPA_AUDIO_FORMAT_S24_LE;
+    case 32u:
+      return SPA_AUDIO_FORMAT_S32_LE;
+    default:
+      return SPA_AUDIO_FORMAT_UNKNOWN;
+  }
+}
+
+static const char *tx_pipewire_audio_format_property(uint8_t sample_size)
+{
+  switch (sample_size) {
+    case 16u:
+      return "S16LE";
+    case 24u:
+      return "S24LE";
+    case 32u:
+      return "S32LE";
+    default:
+      return NULL;
+  }
+}
+
+static int tx_pipewire_get_channel_layout(
+  uint8_t channels,
+  enum spa_audio_channel positions[SPA_AUDIO_MAX_CHANNELS],
+  const char **position_property)
+{
+  if (positions == NULL) {
+    return -1;
+  }
+
+  switch (channels) {
+    case 1u:
+      positions[0] = SPA_AUDIO_CHANNEL_FC;
+      if (position_property != NULL) {
+        *position_property = "[ FC ]";
+      }
+      return 0;
+    case 2u:
+      positions[0] = SPA_AUDIO_CHANNEL_FL;
+      positions[1] = SPA_AUDIO_CHANNEL_FR;
+      if (position_property != NULL) {
+        *position_property = "[ FL FR ]";
+      }
+      return 0;
+    case 3u:
+      positions[0] = SPA_AUDIO_CHANNEL_FL;
+      positions[1] = SPA_AUDIO_CHANNEL_FR;
+      positions[2] = SPA_AUDIO_CHANNEL_FC;
+      if (position_property != NULL) {
+        *position_property = "[ FL FR FC ]";
+      }
+      return 0;
+    case 4u:
+      positions[0] = SPA_AUDIO_CHANNEL_FL;
+      positions[1] = SPA_AUDIO_CHANNEL_FR;
+      positions[2] = SPA_AUDIO_CHANNEL_RL;
+      positions[3] = SPA_AUDIO_CHANNEL_RR;
+      if (position_property != NULL) {
+        *position_property = "[ FL FR RL RR ]";
+      }
+      return 0;
+    case 5u:
+      positions[0] = SPA_AUDIO_CHANNEL_FL;
+      positions[1] = SPA_AUDIO_CHANNEL_FR;
+      positions[2] = SPA_AUDIO_CHANNEL_FC;
+      positions[3] = SPA_AUDIO_CHANNEL_RL;
+      positions[4] = SPA_AUDIO_CHANNEL_RR;
+      if (position_property != NULL) {
+        *position_property = "[ FL FR FC RL RR ]";
+      }
+      return 0;
+    case 6u:
+      positions[0] = SPA_AUDIO_CHANNEL_FL;
+      positions[1] = SPA_AUDIO_CHANNEL_FR;
+      positions[2] = SPA_AUDIO_CHANNEL_FC;
+      positions[3] = SPA_AUDIO_CHANNEL_LFE;
+      positions[4] = SPA_AUDIO_CHANNEL_RL;
+      positions[5] = SPA_AUDIO_CHANNEL_RR;
+      if (position_property != NULL) {
+        *position_property = "[ FL FR FC LFE RL RR ]";
+      }
+      return 0;
+    case 7u:
+      positions[0] = SPA_AUDIO_CHANNEL_FL;
+      positions[1] = SPA_AUDIO_CHANNEL_FR;
+      positions[2] = SPA_AUDIO_CHANNEL_FC;
+      positions[3] = SPA_AUDIO_CHANNEL_LFE;
+      positions[4] = SPA_AUDIO_CHANNEL_RC;
+      positions[5] = SPA_AUDIO_CHANNEL_RL;
+      positions[6] = SPA_AUDIO_CHANNEL_RR;
+      if (position_property != NULL) {
+        *position_property = "[ FL FR FC LFE RC RL RR ]";
+      }
+      return 0;
+    case 8u:
+      positions[0] = SPA_AUDIO_CHANNEL_FL;
+      positions[1] = SPA_AUDIO_CHANNEL_FR;
+      positions[2] = SPA_AUDIO_CHANNEL_FC;
+      positions[3] = SPA_AUDIO_CHANNEL_LFE;
+      positions[4] = SPA_AUDIO_CHANNEL_RL;
+      positions[5] = SPA_AUDIO_CHANNEL_RR;
+      positions[6] = SPA_AUDIO_CHANNEL_SL;
+      positions[7] = SPA_AUDIO_CHANNEL_SR;
+      if (position_property != NULL) {
+        *position_property = "[ FL FR FC LFE RL RR SL SR ]";
+      }
+      return 0;
+    default:
+      return -1;
+  }
+}
+
 static void tx_pipewire_on_signal(void *data, int signal_number)
 {
   tx_pipewire_state_t *state = (tx_pipewire_state_t *)data;
@@ -305,15 +424,43 @@ static void tx_pipewire_stream_process(void *data)
 
 static int tx_pipewire_create_virtual_sink(tx_pipewire_state_t *state, const tx_pipewire_config_t *config)
 {
+  enum spa_audio_channel positions[SPA_AUDIO_MAX_CHANNELS] = { 0 };
+  const char *position_property = NULL;
+  const char *format_property = NULL;
+  char channels_property[4];
+  char rate_property[12];
   struct pw_properties *props;
+
+  if (tx_pipewire_get_channel_layout(config->channels, positions, &position_property) != 0) {
+    fprintf(stderr, "Unsupported channel count for PipeWire sink: %u\n", config->channels);
+    return -1;
+  }
+
+  format_property = tx_pipewire_audio_format_property(config->sample_size);
+  if (format_property == NULL) {
+    fprintf(stderr, "Unsupported sample size for PipeWire sink: %u\n", config->sample_size);
+    return -1;
+  }
+
+  if (snprintf(channels_property, sizeof(channels_property), "%u", config->channels) >= (int)sizeof(channels_property)) {
+    fprintf(stderr, "Invalid channel count for PipeWire sink: %u\n", config->channels);
+    return -1;
+  }
+
+  if (snprintf(rate_property, sizeof(rate_property), "%u", config->sample_rate) >= (int)sizeof(rate_property)) {
+    fprintf(stderr, "Invalid sample rate for PipeWire sink: %u\n", config->sample_rate);
+    return -1;
+  }
 
   props = pw_properties_new(
     "factory.name", "support.null-audio-sink",
     PW_KEY_NODE_NAME, config->sink_name,
     PW_KEY_NODE_DESCRIPTION, config->sink_name,
     PW_KEY_MEDIA_CLASS, "Audio/Sink",
-    "audio.channels", "8",
-    "audio.position", "[ FL FR FC LFE RL RR SL SR ]",
+    "audio.format", format_property,
+    "audio.rate", rate_property,
+    "audio.channels", channels_property,
+    "audio.position", position_property,
     "object.linger", "false",
     NULL);
 
@@ -362,11 +509,39 @@ int tx_pipewire_run(
   struct spa_pod_builder stream_param_builder =
     SPA_POD_BUILDER_INIT(stream_param_buffer, sizeof(stream_param_buffer));
   const struct spa_pod *stream_params[1];
+  tx_audio_format_t requested_format = { 0 };
   struct spa_audio_info_raw requested_info = { 0 };
+  enum spa_audio_channel requested_positions[SPA_AUDIO_MAX_CHANNELS] = { 0 };
+  enum spa_audio_format requested_spa_format;
+  uint32_t i;
   char monitor_target[256];
   int rc = 0;
 
   if (config == NULL || config->sink_name == NULL || config->stream_name == NULL || audio_fn == NULL) {
+    return -1;
+  }
+
+  requested_format.sample_rate = config->sample_rate;
+  requested_format.sample_size = config->sample_size;
+  requested_format.channels = config->channels;
+  requested_format.channel_map = tx_protocol_default_channel_map(config->channels);
+  if (tx_protocol_validate_format(&requested_format) != 0) {
+    fprintf(stderr,
+      "Invalid sender format: sample_rate=%u sample_size=%u channels=%u\n",
+      config->sample_rate,
+      config->sample_size,
+      config->channels);
+    return -1;
+  }
+
+  if (tx_pipewire_get_channel_layout(config->channels, requested_positions, NULL) != 0) {
+    fprintf(stderr, "Unsupported channel layout: %u\n", config->channels);
+    return -1;
+  }
+
+  requested_spa_format = tx_pipewire_spa_format_for_sample_size(config->sample_size);
+  if (requested_spa_format == SPA_AUDIO_FORMAT_UNKNOWN) {
+    fprintf(stderr, "Unsupported sample size for PipeWire capture: %u\n", config->sample_size);
     return -1;
   }
 
@@ -439,27 +614,20 @@ int tx_pipewire_run(
 
   pw_stream_add_listener(state.stream, &state.stream_listener, &stream_events, &state);
 
-  /* Request a concrete raw format so PipeWire can instantiate ports and link to the monitor. */
-  requested_info.format = SPA_AUDIO_FORMAT_F32_LE;
-  requested_info.rate = 48000;
-  requested_info.channels = 8;
-  requested_info.position[0] = SPA_AUDIO_CHANNEL_FL;
-  requested_info.position[1] = SPA_AUDIO_CHANNEL_FR;
-  requested_info.position[2] = SPA_AUDIO_CHANNEL_FC;
-  requested_info.position[3] = SPA_AUDIO_CHANNEL_LFE;
-  requested_info.position[4] = SPA_AUDIO_CHANNEL_RL;
-  requested_info.position[5] = SPA_AUDIO_CHANNEL_RR;
-  requested_info.position[6] = SPA_AUDIO_CHANNEL_SL;
-  requested_info.position[7] = SPA_AUDIO_CHANNEL_SR;
+  /* Request an explicit format so PipeWire links immediately to the monitor source. */
+  requested_info.format = requested_spa_format;
+  requested_info.rate = config->sample_rate;
+  requested_info.channels = config->channels;
+  for (i = 0u; i < requested_info.channels && i < SPA_AUDIO_MAX_CHANNELS; ++i) {
+    requested_info.position[i] = requested_positions[i];
+  }
 
   /* Some PipeWire setups do not emit an initial Format param event reliably.
    * Preload a sane default format so process() can immediately forward PCM. */
   state.spa_format = requested_info.format;
-  state.active_format.sample_rate = requested_info.rate;
-  state.active_format.sample_size = tx_pipewire_sample_size_for_spa(requested_info.format);
-  state.active_format.channels = (uint8_t)requested_info.channels;
+  state.active_format = requested_format;
   state.active_format.channel_map = tx_pipewire_channel_mask(&requested_info);
-  state.have_format = (state.active_format.sample_size != 0u) ? 1 : 0;
+  state.have_format = 1;
   if (state.verbose > 0 && state.have_format) {
     fprintf(stderr,
       "PipeWire preloaded format: %u Hz, %u-bit, %u ch, mask=0x%04x\n",

@@ -9,6 +9,9 @@
 typedef struct tx_pipewire_config {
   const char *sink_name;
   const char *stream_name;
+  uint32_t sample_rate;
+  uint8_t sample_size;
+  uint8_t channels;
   int verbose;
 } tx_pipewire_config_t;
 
