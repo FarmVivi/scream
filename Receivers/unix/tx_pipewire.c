@@ -17,7 +17,6 @@ typedef struct tx_pipewire_state {
   struct pw_context *context;
   struct pw_core *core;
   struct pw_stream *stream;
-  struct pw_proxy *sink_proxy;
   struct spa_hook stream_listener;
 
   tx_pipewire_audio_fn audio_fn;
@@ -363,7 +362,7 @@ static void tx_pipewire_stream_param_changed(void *data, uint32_t id, const stru
 
   if (state->verbose > 0) {
     fprintf(stderr,
-      "PipeWire capture format: %u Hz, %u-bit, %u ch, mask=0x%04x\n",
+      "PipeWire sink format: %u Hz, %u-bit, %u ch, mask=0x%04x\n",
       state->active_format.sample_rate,
       state->active_format.sample_size,
       state->active_format.channels,
@@ -422,72 +421,59 @@ static void tx_pipewire_stream_process(void *data)
   }
 }
 
-static int tx_pipewire_create_virtual_sink(tx_pipewire_state_t *state, const tx_pipewire_config_t *config)
+static struct pw_properties *tx_pipewire_build_sink_properties(const tx_pipewire_config_t *config)
 {
   enum spa_audio_channel positions[SPA_AUDIO_MAX_CHANNELS] = { 0 };
   const char *position_property = NULL;
   const char *format_property = NULL;
-  char channels_property[4];
+  char channels_property[5];
   char rate_property[12];
   struct pw_properties *props;
 
   if (tx_pipewire_get_channel_layout(config->channels, positions, &position_property) != 0) {
-    fprintf(stderr, "Unsupported channel count for PipeWire sink: %u\n", config->channels);
-    return -1;
+    fprintf(stderr, "Unsupported channel count for PipeWire stream: %u\n", config->channels);
+    return NULL;
   }
 
   format_property = tx_pipewire_audio_format_property(config->sample_size);
   if (format_property == NULL) {
-    fprintf(stderr, "Unsupported sample size for PipeWire sink: %u\n", config->sample_size);
-    return -1;
+    fprintf(stderr, "Unsupported sample size for PipeWire stream: %u\n", config->sample_size);
+    return NULL;
   }
 
   if (snprintf(channels_property, sizeof(channels_property), "%u", config->channels) >= (int)sizeof(channels_property)) {
-    fprintf(stderr, "Invalid channel count for PipeWire sink: %u\n", config->channels);
-    return -1;
+    fprintf(stderr, "Invalid channel count for PipeWire stream: %u\n", config->channels);
+    return NULL;
   }
 
   if (snprintf(rate_property, sizeof(rate_property), "%u", config->sample_rate) >= (int)sizeof(rate_property)) {
-    fprintf(stderr, "Invalid sample rate for PipeWire sink: %u\n", config->sample_rate);
-    return -1;
+    fprintf(stderr, "Invalid sample rate for PipeWire stream: %u\n", config->sample_rate);
+    return NULL;
   }
 
   props = pw_properties_new(
-    "factory.name", "support.null-audio-sink",
+    PW_KEY_MEDIA_TYPE, "Audio",
+    PW_KEY_MEDIA_CATEGORY, "Playback",
+    PW_KEY_MEDIA_ROLE, "Music",
+    PW_KEY_MEDIA_CLASS, "Audio/Sink",
     PW_KEY_NODE_NAME, config->sink_name,
     PW_KEY_NODE_DESCRIPTION, config->sink_name,
-    PW_KEY_MEDIA_CLASS, "Audio/Sink",
-    "audio.format", format_property,
-    "audio.rate", rate_property,
-    "audio.channels", channels_property,
+    PW_KEY_MEDIA_NAME, config->stream_name,
+    PW_KEY_NODE_VIRTUAL, "true",
+    "priority.session", "1",
+    PW_KEY_NODE_AUTOCONNECT, "true",
+    PW_KEY_AUDIO_FORMAT, format_property,
+    PW_KEY_AUDIO_RATE, rate_property,
+    PW_KEY_AUDIO_CHANNELS, channels_property,
     "audio.position", position_property,
-    "object.linger", "false",
     NULL);
 
   if (props == NULL) {
-    fprintf(stderr, "Failed to allocate PipeWire sink properties.\n");
-    return -1;
+    fprintf(stderr, "Failed to allocate PipeWire sink stream properties.\n");
+    return NULL;
   }
 
-  state->sink_proxy = pw_core_create_object(
-    state->core,
-    "adapter",
-    PW_TYPE_INTERFACE_Node,
-    PW_VERSION_NODE,
-    &props->dict,
-    0);
-  pw_properties_free(props);
-
-  if (state->sink_proxy == NULL) {
-    fprintf(stderr, "Failed to create PipeWire virtual sink '%s'.\n", config->sink_name);
-    return -1;
-  }
-
-  if (state->verbose > 0) {
-    fprintf(stderr, "Created PipeWire virtual sink: %s\n", config->sink_name);
-  }
-
-  return 0;
+  return props;
 }
 
 int tx_pipewire_run(
@@ -514,7 +500,6 @@ int tx_pipewire_run(
   enum spa_audio_channel requested_positions[SPA_AUDIO_MAX_CHANNELS] = { 0 };
   enum spa_audio_format requested_spa_format;
   uint32_t i;
-  char monitor_target[256];
   int rc = 0;
 
   if (config == NULL || config->sink_name == NULL || config->stream_name == NULL || audio_fn == NULL) {
@@ -541,7 +526,7 @@ int tx_pipewire_run(
 
   requested_spa_format = tx_pipewire_spa_format_for_sample_size(config->sample_size);
   if (requested_spa_format == SPA_AUDIO_FORMAT_UNKNOWN) {
-    fprintf(stderr, "Unsupported sample size for PipeWire capture: %u\n", config->sample_size);
+    fprintf(stderr, "Unsupported sample size for PipeWire sink: %u\n", config->sample_size);
     return -1;
   }
 
@@ -574,47 +559,22 @@ int tx_pipewire_run(
     goto cleanup;
   }
 
-  if (tx_pipewire_create_virtual_sink(&state, config) != 0) {
-    rc = -1;
-    goto cleanup;
-  }
-
-  if (snprintf(monitor_target, sizeof(monitor_target), "%s.monitor", config->sink_name) >= (int)sizeof(monitor_target)) {
-    fprintf(stderr, "PipeWire monitor target name is too long.\n");
-    rc = -1;
-    goto cleanup;
-  }
-
-  if (state.verbose > 0) {
-    fprintf(stderr, "PipeWire capture target: %s\n", monitor_target);
-  }
-
-  stream_props = pw_properties_new(
-    PW_KEY_MEDIA_TYPE, "Audio",
-    PW_KEY_MEDIA_CATEGORY, "Capture",
-    PW_KEY_MEDIA_ROLE, "Music",
-    PW_KEY_NODE_NAME, config->stream_name,
-    PW_KEY_NODE_DESCRIPTION, config->stream_name,
-    PW_KEY_TARGET_OBJECT, monitor_target,
-    PW_KEY_STREAM_CAPTURE_SINK, "true",
-    NULL);
-
+  stream_props = tx_pipewire_build_sink_properties(config);
   if (stream_props == NULL) {
-    fprintf(stderr, "Failed to allocate PipeWire stream properties.\n");
     rc = -1;
     goto cleanup;
   }
 
-  state.stream = pw_stream_new(state.core, config->stream_name, stream_props);
+  state.stream = pw_stream_new(state.core, config->sink_name, stream_props);
   if (state.stream == NULL) {
-    fprintf(stderr, "Failed to create PipeWire stream.\n");
+    fprintf(stderr, "Failed to create PipeWire sink stream '%s'.\n", config->sink_name);
     rc = -1;
     goto cleanup;
   }
 
   pw_stream_add_listener(state.stream, &state.stream_listener, &stream_events, &state);
 
-  /* Request an explicit format so PipeWire links immediately to the monitor source. */
+  /* Request an explicit sink format so applications can link without remapping surprises. */
   requested_info.format = requested_spa_format;
   requested_info.rate = config->sample_rate;
   requested_info.channels = config->channels;
@@ -623,7 +583,7 @@ int tx_pipewire_run(
   }
 
   /* Some PipeWire setups do not emit an initial Format param event reliably.
-   * Preload a sane default format so process() can immediately forward PCM. */
+   * Preload the requested format so process() can immediately forward PCM. */
   state.spa_format = requested_info.format;
   state.active_format = requested_format;
   state.active_format.channel_map = tx_pipewire_channel_mask(&requested_info);
@@ -635,6 +595,7 @@ int tx_pipewire_run(
       state.active_format.sample_size,
       state.active_format.channels,
       state.active_format.channel_map);
+    fprintf(stderr, "PipeWire sink node ready: %s (media.name: %s)\n", config->sink_name, config->stream_name);
   }
 
   stream_params[0] = spa_format_audio_raw_build(
@@ -649,7 +610,7 @@ int tx_pipewire_run(
       PW_STREAM_FLAG_AUTOCONNECT | PW_STREAM_FLAG_MAP_BUFFERS | PW_STREAM_FLAG_RT_PROCESS,
       stream_params,
       1) != 0) {
-    fprintf(stderr, "Failed to connect PipeWire stream.\n");
+    fprintf(stderr, "Failed to connect PipeWire sink stream.\n");
     rc = -1;
     goto cleanup;
   }
@@ -663,7 +624,7 @@ int tx_pipewire_run(
   }
 
   if (state.verbose > 0) {
-    fprintf(stderr, "Scream TX capture running. Press Ctrl+C to stop.\n");
+    fprintf(stderr, "Scream TX sink running. Press Ctrl+C to stop.\n");
   }
 
   pw_main_loop_run(state.main_loop);
@@ -675,11 +636,6 @@ cleanup:
   if (state.stream != NULL) {
     pw_stream_destroy(state.stream);
     state.stream = NULL;
-  }
-
-  if (state.sink_proxy != NULL) {
-    pw_proxy_destroy(state.sink_proxy);
-    state.sink_proxy = NULL;
   }
 
   if (state.core != NULL) {

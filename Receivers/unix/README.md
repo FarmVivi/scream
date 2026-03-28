@@ -98,7 +98,8 @@ Run with `env LIBASOUND_DEBUG=1` for ALSA diagnostics.
 
 ## Sender usage (`scream-tx`)
 
-`scream-tx` creates a dedicated virtual PipeWire sink and captures from it.
+`scream-tx` exposes a dedicated virtual PipeWire output sink (`Audio/Sink`).
+Audio is sent to the network only when an application is routed to this sink.
 It does not change the system default output automatically.
 
 Show options:
@@ -114,6 +115,8 @@ $ scream-tx --verbose
 ```
 
 Default sender format is stereo, 16-bit, 48kHz.
+With default PipeWire routing, no packets are sent until `scream_tx_sink` is selected
+globally or per-application.
 
 Unicast sender example:
 
@@ -173,3 +176,14 @@ $ systemctl --user enable --now scream-tx.service
 ```
 
 Then customize `Environment=` lines inside the unit for your destination host/group and sender settings.
+
+### Routing check (`wpctl`)
+
+To verify isolation ("if not selected, no network stream"), inspect current links:
+
+```shell
+$ wpctl status
+```
+
+- If app streams are linked to your physical sink, `scream-tx` stays idle.
+- If app streams are linked to `scream_tx_sink`, audio is transmitted on the network.
