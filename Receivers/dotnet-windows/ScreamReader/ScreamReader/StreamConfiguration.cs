@@ -1,0 +1,151 @@
+using System.Net;
+using System.Net.Sockets;
+
+namespace ScreamReader
+{
+    /// <summary>
+    /// Configuration for the audio stream receiver
+    /// </summary>
+    public class StreamConfiguration
+    {
+        // Network settings
+        public IPAddress IpAddress { get; set; }
+        public int Port { get; set; }
+        public bool IsMulticast { get; set; }
+
+        // Audio settings (can be auto-detected from stream)
+        public int BitWidth { get; set; }
+        public int SampleRate { get; set; }
+        public int Channels { get; set; }
+
+        // Auto-detection flags
+        public bool IsAutoDetectFormat { get; set; } = true;   // true = auto-detect format from stream
+        public bool IsAutoBuffer { get; set; } = true;         // true = adaptive buffer management
+        public bool IsAutoWasapi { get; set; } = true;         // true = adaptive WASAPI latency
+
+        // Buffer settings
+        public int BufferDuration { get; set; } = -1;  // -1 = auto
+        public int WasapiLatency { get; set; } = -1;   // -1 = auto
+        public bool UseExclusiveMode { get; set; } = false;
+
+        /// <summary>
+        /// Creates a default configuration
+        /// </summary>
+        public static StreamConfiguration CreateDefault()
+        {
+            return new StreamConfiguration
+            {
+                IpAddress = IPAddress.Parse("239.255.77.77"),
+                Port = 4010,
+                IsMulticast = true,
+                BitWidth = 16,
+                SampleRate = 44100,
+                Channels = 2,
+                IsAutoDetectFormat = true,
+                IsAutoBuffer = true,
+                IsAutoWasapi = true,
+                BufferDuration = -1,
+                WasapiLatency = -1,
+                UseExclusiveMode = false
+            };
+        }
+
+        /// <summary>
+        /// Creates a clone of the configuration
+        /// </summary>
+        public StreamConfiguration Clone()
+        {
+            return new StreamConfiguration
+            {
+                IpAddress = this.IpAddress,
+                Port = this.Port,
+                IsMulticast = this.IsMulticast,
+                BitWidth = this.BitWidth,
+                SampleRate = this.SampleRate,
+                Channels = this.Channels,
+                IsAutoDetectFormat = this.IsAutoDetectFormat,
+                IsAutoBuffer = this.IsAutoBuffer,
+                IsAutoWasapi = this.IsAutoWasapi,
+                BufferDuration = this.BufferDuration,
+                WasapiLatency = this.WasapiLatency,
+                UseExclusiveMode = this.UseExclusiveMode
+            };
+        }
+
+        /// <summary>
+        /// Validates the configuration
+        /// </summary>
+        public bool IsValid(out string error)
+        {
+            if (IpAddress == null)
+            {
+                error = "Invalid IP address";
+                return false;
+            }
+
+            if (IsMulticast && !IsMulticastAddress(IpAddress))
+            {
+                error = "Multicast mode requires a multicast address (224.0.0.0–239.255.255.255)";
+                return false;
+            }
+
+            if (Port < 1 || Port > 65535)
+            {
+                error = "Invalid port (must be between 1 and 65535)";
+                return false;
+            }
+
+            if (BitWidth != 16 && BitWidth != 24 && BitWidth != 32)
+            {
+                error = "Invalid bit depth (16, 24 or 32)";
+                return false;
+            }
+
+            if (SampleRate < 8000 || SampleRate > 192000)
+            {
+                error = "Invalid sample rate (8000-192000 Hz)";
+                return false;
+            }
+
+            if (Channels < 1 || Channels > 8)
+            {
+                error = "Invalid number of channels (1-8)";
+                return false;
+            }
+
+            if (BufferDuration != -1 && (BufferDuration < 1 || BufferDuration > 1000))
+            {
+                error = "Invalid buffer duration (1-1000 ms or -1 for auto)";
+                return false;
+            }
+
+            if (WasapiLatency != -1 && (WasapiLatency < 1 || WasapiLatency > 1000))
+            {
+                error = "Invalid WASAPI latency (1-1000 ms or -1 for auto)";
+                return false;
+            }
+
+            error = null;
+            return true;
+        }
+
+        /// <summary>True if the address is in the IPv4 (224–239.x.x.x) or IPv6 multicast range.</summary>
+        private static bool IsMulticastAddress(IPAddress ip)
+        {
+            if (ip.AddressFamily == AddressFamily.InterNetworkV6)
+                return ip.IsIPv6Multicast;
+
+            byte firstOctet = ip.GetAddressBytes()[0];
+            return firstOctet >= 224 && firstOctet <= 239;
+        }
+
+        public override string ToString()
+        {
+            return $"{(IsMulticast ? "Multicast" : "Unicast")} {IpAddress}:{Port} | " +
+                   $"{SampleRate}Hz {BitWidth}bit {Channels}ch | " +
+                   $"Buffer:{(BufferDuration == -1 ? "Auto" : BufferDuration + "ms")} " +
+                   $"WASAPI:{(WasapiLatency == -1 ? "Auto" : WasapiLatency + "ms")} " +
+                   $"{(UseExclusiveMode ? "Exclusive" : "Shared")}";
+        }
+    }
+}
